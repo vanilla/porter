@@ -32,6 +32,7 @@ $Supported = array(
    'vbulletin' => array('name'=>'vBulletin 3.* and 4.*', 'prefix'=>'vb_'),
    'phpbb2' => array('name'=>'phpBB 2.*', 'prefix' => 'phpbb_'),
    'phpbb3' => array('name'=>'phpBB 3.*', 'prefix' => 'phpbb_'),
+   'smf2' => array('name'=>'SMF 2.*', 'prefix' => 'smf_'),
    'bbPress' => array('name'=>'bbPress 1.*', 'prefix' => 'bb_'),
    'SimplePress' => array('name'=>'SimpePress 1.*', 'prefix' => 'wp_')
 );
@@ -45,6 +46,7 @@ include('class.vanilla1.php');
 include('class.vbulletin.php');
 include('class.phpbb2.php');
 include('class.phpbb3.php');
+include('class.smf2.php');
 include('class.bbpress.php');
 include('class.simplepress.php');
 
