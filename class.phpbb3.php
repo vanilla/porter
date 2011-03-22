@@ -11,6 +11,7 @@ class Phpbb3 extends ExportController {
 
    /** @var array Required tables => columns */
    protected $SourceTables = array(
+      'attachments' => array('attach_id', 'post_msg_id', 'topic_id', 'poster_id', 'physical_filename', 'real_filename', 'mimetype', 'filesize', 'filetime'),
       'users' => array('user_id', 'username', 'user_password', 'user_email', 'user_timezone', 'user_posts', 'user_regdate', 
          'user_lastvisit', 'user_regdate'),
       'groups' => array('group_id', 'group_name', 'group_desc'),
@@ -119,13 +120,45 @@ class Phpbb3 extends ExportController {
          1 as Bookmarked
          from :_bookmarks b", $UserDiscussion_Map);
 
+      // Media
+      if ($Ex->Exists('attachments')) {
+         $Media_Map = array(
+            'attach_id' => 'MediaID',
+            'real_filename' => 'Name',
+            'mimetype' => 'Type',
+            'filesize' => 'Size',
+            'physical_filename' => array('Column' => 'Path', 'Filter' => array($this, 'BuildMediaPath')),
+            'poster_id' => 'InsertUserID'
+         );
+         $Ex->ExportTable('Media',
+            "select a.*, 
+               p.post_id as post_id,
+               'local' as StorageMethod, 
+               IF(p.post_id != p.topic_id, 'comment', 'discussion') as ForeignTable,
+               IF(p.post_id != p.topic_id, post_id, a.topic_id) as ForeignID,
+               FROM_UNIXTIME(a.filetime) as DateInserted
+            from :_attachments a
+               left join :_posts p ON a.post_msg_id = p.post_id", $Media_Map);
+      }
+
       // End
       $Ex->EndExport();
    }
 
-   public function RemoveBBCodeUIDs($Value, $Field, $Row) {
+   public function ConvertText($Value, $Field, $Row) {
+      //RemoveBBCodeUIDs
       $UID = $Row['bbcode_uid'];
-      return str_replace(':'.$UID, '', $Value);
+      $Value = str_replace(':'.$UID, '', $Value);
+      if(preg_match_all('#<!-- s(.{2,3}) --><img src="{SMILIES_PATH}/.*\.gif" alt=".+" title="[a-zA-Z]+" /><!-- s.{2,3} -->#', $Value, $Matches)) {
+            // Replace emoction followed by space (Emotify does not work without space)
+            $Value = preg_replace('#<!-- s(.{2,3}) --><img src="{SMILIES_PATH}/.*\.gif" alt=".+" title="[a-zA-Z]+" /><!-- s.{2,3} -->#', '$1 ', $Value);
+      }
+      return $Value;
+   }
+
+   function BuildMediaPath($Value, $Field, $Row) {
+
+             return '/'.$Row['physical_filename'];
    }
 }
 ?>
