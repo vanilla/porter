@@ -2326,7 +2326,7 @@ class Smf2 extends ExportController {
                 m.id_member InsertUserID,
                 from_unixtime(poster_time) DateInserted,
                 'comment' ForeignTable
-                from :_attachments a join smf_messages m on m.id_msg = a.id_msg
+                from :_attachments a join :_messages m on m.id_msg = a.id_msg
                 where a.id_msg not in (select id_first_msg from :_topics t) and attachment_type = 0
             ",
         $Media_Map);
@@ -2372,30 +2372,23 @@ class Smf2 extends ExportController {
          'id_pm' => 'LastMessageID',
       );
 
-      $Ex->ExportTable('UserConversation',"select pm.id_member_from,
-            pm.id_pm_head, pm_last.id_pm, pm.deleted_by_sender Deleted, pm_count.count CountReadMessages
-            from :_personal_messages pm
-                join (select id_pm_head, max(id_pm) id_pm
-                        from :_personal_messages
-                        group by id_pm_head) pm_last
-                    on pm.id_pm_head = pm_last.id_pm_head
-                join (select id_pm_head, count(id_pm) count
-                        from :_personal_messages
-                        group by id_pm_head) pm_count
-                    on pm.id_pm_head = pm_count.id_pm_head
-            union
-            select pmr.id_member id_member_from, pm.id_pm_head,
-            pm_last.id_pm, pmr.deleted Deleted, pm_count.count CountReadMessages
+      $Ex->ExportTable('UserConversation',"
+            select pm.id_member_from,
+                pm.id_pm_head, pm.deleted_by_sender Deleted, pm_agr.id_pm, pm_agr.count CountReadMessages
                 from :_personal_messages pm
-                    join (select id_pm_head, max(id_pm) id_pm
-                            from :_personal_messages
-                            group by id_pm_head) pm_last
-                       on pm.id_pm_head = pm_last.id_pm_head
-                    join (select id_pm_head, count(id_pm) count
-                            from :_personal_messages
-                            group by id_pm_head) pm_count
-                       on pm.id_pm_head = pm_count.id_pm_head
-                    join :_pm_recipients pmr on pm.id_pm = pmr.id_pm",
+                    join (select id_pm_head, max(id_pm) id_pm, count(id_pm) count
+                    from :_personal_messages
+                        group by id_pm_head) pm_agr
+                    on pm.id_pm_head = pm_agr.id_pm_head
+            union
+            select pmr.id_member id_member_from,pm.id_pm_head,
+                pmr.deleted Deleted, pm_agr.id_pm, pm_agr.count CountReadMessages
+            from :_personal_messages pm
+                    join :_pm_recipients pmr on pm.id_pm = pmr.id_pm
+                join (select id_pm_head, max(id_pm) id_pm, count(id_pm) count
+                    from :_personal_messages
+                        group by id_pm_head) pm_agr
+                    on pm.id_pm_head = pm_agr.id_pm_head",
             $UserConversation_Map);
 
       // End
