@@ -151,7 +151,10 @@ class ExportModel {
       'UserConversation' => array(
             'UserID' => 'int',
             'ConversationID' => 'int',
-            'LastMessageID' => 'int'),
+            'LastMessageID' => 'int',
+            'CountReadMessages' => 'int',
+            'Deleted' => 'int',
+      ),
       'UserDiscussion' => array(
             'UserID' => 'int',
             'DiscussionID' => 'int',

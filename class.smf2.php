@@ -17,7 +17,7 @@ class Smf2 extends ExportController {
        'boards' => array('id_board', 'name', 'description', 'id_parent','board_order'),
        'topics' => array('id_topic', 'id_board', 'id_member_started',  'num_views', 'id_first_msg', 'num_replies', 'id_last_msg'),
        'messages' => array('id_msg', 'id_topic', 'subject', 'body', 'id_member', 'modified_name','modified_name', 'poster_time', 'modified_time'),
-       'personal_messages' => array('id_pm','id_member_from','body'),
+       'personal_messages' => array('id_pm','id_pm_head','id_member_from','msgtime','body'),
        'attachments' => array('id_attach','id_msg','filename','size','fileext','mime_type'),
     );
 
@@ -55,16 +55,15 @@ class Smf2 extends ExportController {
          'group_name'=>'Name',
          'description'=>'Description'
       );
-      $Ex->ExportTable('Role', 'select * from :_membergroups', $Role_Map);
-
+      $Ex->ExportTable('Role', "select * from :_membergroups", $Role_Map);
 
       // UserRoles
       $UserRole_Map = array(
          'id_member'=>'UserID',
          'id_group'=>'RoleID'
       );
-      $Ex->ExportTable('UserRole', 'select id_member, id_group from :_members where id_group !=0 
-       union select m.id_member,g.id_group from :_members m join :_membergroups g on find_in_set(g.id_group,m.additional_groups)', $UserRole_Map);
+      $Ex->ExportTable('UserRole', "select id_member, id_group from :_members where id_group !=0
+       union select m.id_member,g.id_group from :_members m join :_membergroups g on find_in_set(g.id_group,m.additional_groups)", $UserRole_Map);
 
       // Categories
       $Category_Map = array(
@@ -128,44 +127,111 @@ class Smf2 extends ExportController {
           'size' => 'Size',
       );
 
-      $Ex->ExportTable('Media','select a.*,
+      $Ex->ExportTable('Media',"select a.*,
         case fileext
-            when \'jpg\' then \'image/jpeg\'
-            when \'jpeg\' then \'image/jpeg\'
-            when \'gif\' then \'image/gif\'
-            when \'png\' then \'image/png\'
-            when \'bmp\' then \'image/bmp\'
-            when \'txt\' then \'text/plan\'
-            when \'htm\' then \'text/html\'
-            when \'html\' then \'text/html\'
-            else \'application/octet-stream\'
+            when 'jpg' then 'image/jpeg'
+            when 'jpeg' then 'image/jpeg'
+            when 'gif' then 'image/gif'
+            when 'png' then 'image/png'
+            when 'bmp' then 'image/bmp'
+            when 'txt' then 'text/plan'
+            when 'htm' then 'text/html'
+            when 'html' then 'text/html'
+            else 'application/octet-stream'
             end Type,
             m.id_member InsertUserID,
             from_unixtime(m.poster_time) DateInserted,
-            \'discussion\' ForeignTable
+            'discussion' ForeignTable
             from :_attachments a join :_messages m on m.id_msg = a.id_msg join :_topics t on a.id_msg = t.id_first_msg
             where attachment_type = 0
             union select a.*,
                 case fileext
-                when \'jpg\' then \'image/jpeg\'
-                when \'jpeg\' then \'image/jpeg\'
-                when \'gif\' then \'image/gif\'
-                when \'png\' then \'image/png\'
-                when \'bmp\' then \'image/bmp\'
-                when \'txt\' then \'text/plan\'
-                when \'htm\' then \'text/html\'
-                when \'html\' then \'text/html\'
-                else \'application/octet-stream\'
+                when 'jpg' then 'image/jpeg'
+                when 'jpeg' then 'image/jpeg'
+                when 'gif' then 'image/gif'
+                when 'png' then 'image/png'
+                when 'bmp' then 'image/bmp'
+                when 'txt' then 'text/plan'
+                when 'htm' then 'text/html'
+                when 'html' then 'text/html'
+                else 'application/octet-stream'
                 end Type,
                 m.id_member InsertUserID,
                 from_unixtime(poster_time) DateInserted,
-                \'comment\' ForeignTable
+                'comment' ForeignTable
                 from :_attachments a join smf_messages m on m.id_msg = a.id_msg
                 where a.id_msg not in (select id_first_msg from :_topics t) and attachment_type = 0
-            ',
-        $Media_Map)
+            ",
+        $Media_Map);
 
-      */// End
+      // Conversations
+      $Conversation_Map = array(
+         'id_pm_head' => 'ConversationID',
+         'id_pm' => 'FirstMessageID',
+         'id_member_from' => 'InsertUserID',
+      );
+
+      $Ex->ExportTable('Conversation', "select pm.id_pm_head, pm.id_pm,
+            from_unixtime(pm.msgtime) DateInserted,
+            pm.id_member_from,
+            pm_last.id_member_from UpdateUserID,
+            from_unixtime(pm_last.msgtime) DateUpdated
+          from :_personal_messages pm
+            join (select pm.id_pm_head,pm.id_member_from, max(pm.msgtime) msgtime
+                    from :_personal_messages pm
+                    group by pm.id_pm_head,pm.id_member_from) pm_last
+                on pm_last.id_pm_head = pm.id_pm_head
+            where pm.id_pm = pm.id_pm_head",
+         $Conversation_Map);
+
+      // Conversation Messages
+      $ConversationMessage_Map = array(
+         'id_pm' => 'MessageID',
+         'id_pm_head' => 'ConversationID',
+         'body' => 'Body',
+         'id_member_from' => 'InsertUserID'
+      );
+
+      $Ex->ExportTable('ConversationMessage',"select pm.*,
+            'BBCode' Format,
+            from_unixtime(pm.msgtime) DateInserted
+          from :_personal_messages pm",
+         $ConversationMessage_Map);
+
+      // User Conversation
+      $UserConversation_Map = array(
+         'id_member_from' => 'UserID',
+         'id_pm_head' => 'ConversationID',
+         'id_pm' => 'LastMessageID',
+      );
+
+      $Ex->ExportTable('UserConversation',"select pm.id_member_from,
+            pm.id_pm_head, pm_last.id_pm, pm.deleted_by_sender Deleted, pm_count.count CountReadMessages
+            from :_personal_messages pm
+                join (select id_pm_head, max(id_pm) id_pm
+                        from :_personal_messages
+                        group by id_pm_head) pm_last
+                    on pm.id_pm_head = pm_last.id_pm_head
+                join (select id_pm_head, count(id_pm) count
+                        from :_personal_messages
+                        group by id_pm_head) pm_count
+                    on pm.id_pm_head = pm_count.id_pm_head
+            union
+            select pmr.id_member id_member_from, pm.id_pm_head,
+            pm_last.id_pm, pmr.deleted Deleted, pm_count.count CountReadMessages
+                from :_personal_messages pm
+                    join (select id_pm_head, max(id_pm) id_pm
+                            from :_personal_messages
+                            group by id_pm_head) pm_last
+                       on pm.id_pm_head = pm_last.id_pm_head
+                    join (select id_pm_head, count(id_pm) count
+                            from :_personal_messages
+                            group by id_pm_head) pm_count
+                       on pm.id_pm_head = pm_count.id_pm_head
+                    join :_pm_recipients pmr on pm.id_pm = pmr.id_pm",
+            $UserConversation_Map);
+
+      // End
       $Ex->EndExport();
 
     }
