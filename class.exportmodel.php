@@ -83,11 +83,12 @@ class ExportModel {
             'DateInserted' => 'datetime',
             'InsertUserID' => 'int',
             'DateUpdated' => 'datetime',
-            'UpdateUserID' => 'int'),
+            'UpdateUserID' => 'int',
       'ConversationMessage' => array(
             'MessageID' => 'int',
             'ConversationID' => 'int',
             'Body' => 'text',
+            'Format' => 'varchar(20)',
             'InsertUserID' => 'int',
             'DateInserted' => 'datetime'),
       'Discussion' => array(
