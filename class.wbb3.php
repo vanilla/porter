@@ -70,12 +70,19 @@ class WBB3 extends ExportController {
     // Categories
     $Category_Map = array(
       'boardID' => 'CategoryID',
+      'posts' => 'CountComments',
+      'threads' => 'CountDiscussions',
       'title' => 'Name',
       'description' => 'Description',
     );
     $Ex->ExportTable('Category', 'select *,
-      nullif(parentID, 0) as ParentCategoryID
-      from wbb1_1_board', $Category_Map, $Category_Map);
+      FROM_UNIXTIME(time) as DateInserted,
+      FROM_UNIXTIME(time) as DateUpdated,
+      nullif(parentID, 0) as ParentCategoryID,
+      s.position AS Sort
+      from wbb1_1_board b
+      left join wbb1_1_board_structure s 
+        ON (b.boardID = s.boardID AND ParentCategoryID = s.parentID)', $Category_Map, $Category_Map);
     
     // Discussions
     $Discussion_Map = array(
