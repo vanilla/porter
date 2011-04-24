@@ -36,7 +36,7 @@ $Supported = array(
    'phpbb3' => array('name'=>'phpBB 3.*', 'prefix' => 'phpbb_'),
    'bbPress' => array('name'=>'bbPress 1.*', 'prefix' => 'bb_'),
    'SimplePress' => array('name'=>'SimpePress 1.*', 'prefix' => 'wp_'),
-   'wbb3' => array('name'=>'WoltLab Burning Board 3.*', 'prefix' => '*none*'),
+   'wbb3' => array('name'=>'WoltLab Burning Board 3.*', 'prefix' => ''),
 );
 
 // Support Files
@@ -2540,7 +2540,7 @@ class SimplePress extends ExportController {
 /**
  * WBB3 exporter tool
  *
- * @author Lieuwe Jan Eilander
+ * @author Lieuwe Jan Eilander (lieuwejan.com)
  *
  * Framework:
  * @copyright Vanilla Forums Inc. 2010
@@ -2552,21 +2552,19 @@ class SimplePress extends ExportController {
  * not be used.
  *
  * Tested with WBB v. 3.0.9
- *
- * @todo Categories: Get Board structure from wbb1_1_board_structure and put in Categories -> Sort
  */
 
 class WBB3 extends ExportController {
 
   /** @var array Required tables => columns */
   protected $SourceTables = array(
-    'wbb1_1_board' => array('boardID', 'parentID'),
-    'wbb1_1_post' => array(),
-    'wbb1_1_thread' => array(),
-    'wbb1_1_user' => array('userID', 'posts'),
-    'wcf1_user' => array('userID', 'username', 'email', 'password', 'registrationDate', 'lastActivityTime'),
-    'wcf1_group' => array(), 
-    'wcf1_user_to_groups' => array(),
+    'wbb1_1_board' => array('boardID', 'parentID', 'title', 'description', 'time', 'threads', 'posts'),
+    'wbb1_1_board_structure' => array('boardID', 'parentID', 'position'),
+    'wbb1_1_post' => array('postID', 'threadID', 'userID', 'username', 'message', 'time', 'editorID', 'lastEditTime', 'deleteTime', 'deletedByID'),
+    'wbb1_1_thread' => array('threadID', 'boardID', 'topic', 'firstPostID', 'time', 'userID', 'lastPostTime', 'lastPosterID', 'replies', 'views', 'isAnnouncement', 'isClosed', 'deleteTime', 'deletedByID'),
+    'wcf1_user' => array('userID', 'username', 'email', 'password', 'salt', 'registrationDate', 'userTitle', 'lastActivityTime'),
+    'wcf1_group' => array('groupID', 'groupName', 'groupDescription'), 
+    'wcf1_user_to_groups' => array('userID', 'groupID'),
   );
 
   /** 
@@ -2583,14 +2581,17 @@ class WBB3 extends ExportController {
       'userID' => 'UserID',
       'username' => 'Name',
       'email' => 'Email',
+      'password2' => 'Password',
     );
     $Ex->ExportTable('User', 'select *,
-      FROM_UNIXTIME(nullif(registrationDate, 0)) as DateInserted
-      FROM_UNIXTIME(nullif(registrationDate, 0)) as DateFirstVisit
-      FROM_UNIXTIME(nullif(lastActivityTime, 0)) as DateLastActive
+      concat(`password`, salt) as password2,
+      FROM_UNIXTIME(nullif(registrationDate, 0)) as DateInserted,
+      FROM_UNIXTIME(nullif(registrationDate, 0)) as DateFirstVisit,
+      FROM_UNIXTIME(nullif(lastActivityTime, 0)) as DateLastActive,
+      FROM_UNIXTIME(nullif(lastActivityTime, 0)) as DateUpdated
       from wcf1_user', $User_Map);
 
-    // Roles
+    // Role
     $Role_Map = array(
       'groupID' => 'RoleID',
       'groupName' => 'Name',
