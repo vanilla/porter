@@ -34,7 +34,7 @@ $Supported = array(
    'phpbb3' => array('name'=>'phpBB 3.*', 'prefix' => 'phpbb_'),
    'bbPress' => array('name'=>'bbPress 1.*', 'prefix' => 'bb_'),
    'SimplePress' => array('name'=>'SimpePress 1.*', 'prefix' => 'wp_'),
-   'wbb3' => array('name'=>'WoltLab Burning Board 3.*', 'prefix' => '*none*'),
+   'wbb3' => array('name'=>'WoltLab Burning Board 3.*', 'prefix' => ''),
 );
 
 // Support Files
