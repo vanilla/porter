@@ -2563,7 +2563,7 @@ class WBB3 extends ExportController {
     'wbb1_1_board' => array('boardID', 'parentID'),
     'wbb1_1_post' => array(),
     'wbb1_1_thread' => array(),
-    'wbb1_1_user' => array('userID', 'posts');
+    'wbb1_1_user' => array('userID', 'posts'),
     'wcf1_user' => array('userID', 'username', 'email', 'password', 'registrationDate', 'lastActivityTime'),
     'wcf1_group' => array(), 
     'wcf1_user_to_groups' => array(),
@@ -2621,16 +2621,36 @@ class WBB3 extends ExportController {
       'boardID' => 'CategoryID',
       'userID' => 'InsertUserID',
       'topic' => 'Name',
-      
-      // Body, DateInserted, DateUpdated, UpdateUserID, DateLastComment, CountComments, Closed, Announce
+      'isAnnouncement' => 'Announce',
+      'isClosed' => 'Closed',
+      'views' => 'CountViews',
+      'lastPosterID' => 'LastCommentUserID',
     );
-    $Ex->ExportTable('Discussion', 'select * from wbb1_1_thread', $Discussion_Map);
+    $Ex->ExportTable('Discussion', 'select *,
+      p.message as Body,
+      replies+1 as CountComments,
+      FROM_UNIXTIME(lastPostTime) as DateLastComment, 
+      FROM_UNIXTIME(lastPostTime) as DateUpdated,
+      FROM_UNIXTIME(time) as DateInserted,
+      \'BBCode\' as Format 
+      from wbb1_1_thread t
+      left join wbb1_1_post p ON p.postID = t.firstPostID', $Discussion_Map);
     
     // Comments
     $Comment_Map = array(
-      // CommentID, DiscussionID, DateInserted, InsertUserID, DateUpdated, UpdateUserID, Format, Body
+      'postID' => 'CommentID',
+      'threadID' => 'DiscussionID',
+      'userID' => 'InsertUserID',
+      'message' => 'Body',
+      'editorID' => 'UpdateUserID',
+      'deletedByID' => 'DeleteUserID',
     );
-    $Ex->ExportTable('Comment', 'select * from wbb1_1_post', $Comment_Map);
+    $Ex->ExportTable('Comment', 'select *,
+      FROM_UNIXTIME(time) as DateInserted,
+      FROM_UNIXTIME(lastEditTime) as DateUpdated,
+      FROM_UNIXTIME(deleteTime) as DateDeleted,
+      \'BBCode\' as Format,
+      from wbb1_1_post', $Comment_Map);
   }
 
 }
