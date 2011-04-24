@@ -47,10 +47,10 @@ class WBB3 extends ExportController {
     );
     $Ex->ExportTable('User', 'select *,
       concat(`password`, salt) as password2,
-      FROM_UNIXTIME(nullif(registrationDate, 0)) as DateInserted,
-      FROM_UNIXTIME(nullif(registrationDate, 0)) as DateFirstVisit,
-      FROM_UNIXTIME(nullif(lastActivityTime, 0)) as DateLastActive,
-      FROM_UNIXTIME(nullif(lastActivityTime, 0)) as DateUpdated
+      FROM_UNIXTIME(registrationDate) as DateInserted,
+      FROM_UNIXTIME(registrationDate) as DateFirstVisit,
+      FROM_UNIXTIME(lastActivityTime) as DateLastActive,
+      FROM_UNIXTIME(lastActivityTime) as DateUpdated
       from wcf1_user', $User_Map);
 
     // Role
