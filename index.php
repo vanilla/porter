@@ -33,7 +33,8 @@ $Supported = array(
    'phpbb2' => array('name'=>'phpBB 2.*', 'prefix' => 'phpbb_'),
    'phpbb3' => array('name'=>'phpBB 3.*', 'prefix' => 'phpbb_'),
    'bbPress' => array('name'=>'bbPress 1.*', 'prefix' => 'bb_'),
-   'SimplePress' => array('name'=>'SimpePress 1.*', 'prefix' => 'wp_')
+   'SimplePress' => array('name'=>'SimpePress 1.*', 'prefix' => 'wp_'),
+   'wbb3' => array('name'=>'WoltLab Burning Board 3.*', 'prefix' => '*none*'),
 );
 
 // Support Files
@@ -47,6 +48,7 @@ include('class.phpbb2.php');
 include('class.phpbb3.php');
 include('class.bbpress.php');
 include('class.simplepress.php');
+include('class.wbb3.php');
 
 // Make sure a default time zone is set
 if (ini_get('date.timezone') == '')
