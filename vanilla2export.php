@@ -2588,8 +2588,10 @@ class WBB3 extends ExportController {
       FROM_UNIXTIME(registrationDate) as DateInserted,
       FROM_UNIXTIME(registrationDate) as DateFirstVisit,
       FROM_UNIXTIME(lastActivityTime) as DateLastActive,
-      FROM_UNIXTIME(lastActivityTime) as DateUpdated
-      from wcf1_user', $User_Map);
+      FROM_UNIXTIME(lastActivityTime) as DateUpdated,
+      b.posts as CountComments
+      from wcf1_user u
+      left join wbb1_1_user b ON b.userID = u.userID', $User_Map);
 
     // Role
     $Role_Map = array(
@@ -2617,11 +2619,11 @@ class WBB3 extends ExportController {
     $Ex->ExportTable('Category', 'select *,
       FROM_UNIXTIME(time) as DateInserted,
       FROM_UNIXTIME(time) as DateUpdated,
-      nullif(parentID, 0) as ParentCategoryID,
+      nullif(b.parentID, 0) as ParentCategoryID,
       s.position AS Sort
       from wbb1_1_board b
       left join wbb1_1_board_structure s 
-        ON (b.boardID = s.boardID AND ParentCategoryID = s.parentID)', $Category_Map, $Category_Map);
+        ON (b.boardID = s.boardID AND b.parentID = s.parentID)', $Category_Map, $Category_Map);
     
     // Discussions
     $Discussion_Map = array(
@@ -2639,7 +2641,7 @@ class WBB3 extends ExportController {
       replies+1 as CountComments,
       FROM_UNIXTIME(lastPostTime) as DateLastComment, 
       FROM_UNIXTIME(lastPostTime) as DateUpdated,
-      FROM_UNIXTIME(time) as DateInserted,
+      FROM_UNIXTIME(t.time) as DateInserted,
       \'BBCode\' as Format 
       from wbb1_1_thread t
       left join wbb1_1_post p ON p.postID = t.firstPostID', $Discussion_Map);
@@ -2657,7 +2659,7 @@ class WBB3 extends ExportController {
       FROM_UNIXTIME(time) as DateInserted,
       FROM_UNIXTIME(lastEditTime) as DateUpdated,
       FROM_UNIXTIME(deleteTime) as DateDeleted,
-      \'BBCode\' as Format,
+      \'BBCode\' as Format
       from wbb1_1_post', $Comment_Map);
   }
 
