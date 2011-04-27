@@ -127,5 +127,6 @@ class WBB3 extends ExportController {
 
     // End Export
     $Ex->EndExport();
+  }
 }
 ?>
