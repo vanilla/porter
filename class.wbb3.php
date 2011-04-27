@@ -100,7 +100,6 @@ class WBB3 extends ExportController {
     );
     $Ex->ExportTable('Discussion', 'select *,
       p.message as Body,
-      replies+1 as CountComments,
       FROM_UNIXTIME(lastPostTime) as DateLastComment, 
       FROM_UNIXTIME(lastPostTime) as DateUpdated,
       FROM_UNIXTIME(t.time) as DateInserted,
@@ -122,8 +121,11 @@ class WBB3 extends ExportController {
       FROM_UNIXTIME(lastEditTime) as DateUpdated,
       FROM_UNIXTIME(deleteTime) as DateDeleted,
       \'BBCode\' as Format
-      from wbb1_1_post', $Comment_Map);
-  }
+      from wbb1_1_post p
+      left join wbb1_1_thread t ON p.threadID = t.threadID
+      where p.postID <> t.firstPostID', $Comment_Map);
 
+    // End Export
+    $Ex->EndExport();
 }
 ?>
