@@ -36,7 +36,7 @@ class WBB3 extends ExportController {
   protected function ForumExport($Ex)
   {
     // Begin
-    $Ex->BeginExport('', 'WBB 3.x', array('HashMethod' => 'Vanilla'));
+    $Ex->BeginExport('', 'WBB 3.x', array('HashMethod' => 'reset'));
   
     // Users
     $User_Map = array(
