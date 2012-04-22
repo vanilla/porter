@@ -32,7 +32,8 @@ $Supported = array(
    'bbPress' => array('name'=>'bbPress 1.*', 'prefix' => 'bb_'),
    'SimplePress' => array('name'=>'SimplePress 1.*', 'prefix' => 'wp_'),
    'SMF' => array('name'=>'SMF (Simple Machines) 1.*', 'prefix' => 'smf_'),
-   'punbb' => array('name'=>'PunBB 1.*', 'prefix' => 'punbb_')
+   'punbb' => array('name'=>'PunBB 1.*', 'prefix' => 'punbb_'),
+   'xoops_cbb' => array('name'=>'XOOPS CBB', 'prefix' => 'xoops_'),
 );
 
 // Support Files
@@ -49,10 +50,11 @@ include('class.bbpress.php');
 include('class.simplepress.php');
 include('class.smf.php');
 include('class.punbb.php');
+include('class.xoops_cbb.php');
 
 // Make sure a default time zone is set
 if (ini_get('date.timezone') == '')
-   date_default_timezone_set('America/Montreal');
+   date_default_timezone_set('Asia/Taipei');
 
 
 if (PHP_SAPI == 'cli')
