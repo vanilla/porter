@@ -1,4 +1,7 @@
 <?php
+
+$Supported['Xoops_cbb'] = array('name'=>'XOOPS (CBB) 2.*', 'prefix' => 'xoops_');
+
 class Xoops_cbb extends ExportController {
 
    /** @var array Required tables => columns */
@@ -98,7 +101,7 @@ from :_bb_forums f", $Category_Map);
       $Comment_Map = array(
          'post_id' => 'CommentID',
          'topic_id' => 'DiscussionID',
-         'post_text' => array('Column'=>'Body','Filter'=>array($this, 'RemoveBBCodeUIDs')),
+         'post_text' => array('Column'=>'Body'),
          'Format' => 'Format',
          'uid' => 'InsertUserID'
       );
@@ -199,7 +202,7 @@ set pm.groupid = g.groupid;");
       $Conversation_Map = array(
          'msg_id' => 'ConversationID',
          'from_userid' => 'InsertUserID',
-         'RealSubject' => array('Column' => 'Subject', 'Type' => 'varchar(250)', 'Filter' => array('XoopsCbb', 'EntityDecode'))
+         'RealSubject' => array('Column' => 'Subject', 'Type' => 'varchar(250)')
       );
 
       $Ex->ExportTable('Conversation', "select
@@ -214,7 +217,7 @@ join z_pmgroup g
       $ConversationMessage_Map = array(
           'msg_id' => 'MessageID',
           'groupid' => 'ConversationID',
-          'msg_text' => array('Column' => 'Body', 'Filter'=>array($this, 'RemoveBBCodeUIDs')),
+          'msg_text' => array('Column' => 'Body'),
           'from_userid' => 'InsertUserID'
       );
       $Ex->ExportTable('ConversationMessage',
@@ -249,12 +252,4 @@ join z_pmgroup g
       $Ex->EndExport();
    }
 
-   public static function EntityDecode($Value) {
-      return html_entity_decode($Value, ENT_QUOTES, 'UTF-8');
-   }
-
-   public function RemoveBBCodeUIDs($Value, $Field, $Row) {
-      $UID = $Row['bbcode_uid'];
-      return str_replace(':'.$UID, '', $Value);
-   }
 }
