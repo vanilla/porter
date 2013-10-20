@@ -8,6 +8,8 @@
  * @license http://opensource.org/licenses/gpl-2.0.php GNU GPL2
  * @package VanillaPorter
  */
+ 
+$Supported['SMF'] = array('name'=>'SMF (Simple Machines) 1.*', 'prefix' => 'smf_');
 
 class SMF extends ExportController {
 
@@ -39,20 +41,22 @@ class SMF extends ExportController {
          'DateInserted'=>'DateInserted',
          'timeOffset'=>'HourOffset',
          'posts'=>'CountComments',
-         'avatar'=>'Photo',
+         //'avatar'=>'Photo',
          'birthdate'=>'DateOfBirth',
          'DateFirstVisit'=>'DateFirstVisit',
          'DateLastActive'=>'DateLastActive',
          'DateUpdated'=>'DateUpdated'
       );
       $Ex->ExportTable('User', "
-         select *,
+         select m.*,
             from_unixtime(dateRegistered) as DateInserted,
             from_unixtime(dateRegistered) as DateFirstVisit,
             from_unixtime(lastLogin) as DateLastActive,
             from_unixtime(lastLogin) as DateUpdated,
-            concat('sha1$', lower(memberName), '$', passwd) as `password`
-         from :_members", $User_Map);
+            concat('sha1$', lower(memberName), '$', passwd) as `password`,
+            if(m.avatar <> '', m.avatar, concat('attachments/', a.filename)) as Photo
+         from :_members m
+         left join :_attachments a on a.ID_MEMBER = m.ID_MEMBER ", $User_Map);
 
       // Roles
       $Role_Map = array(
@@ -152,6 +156,25 @@ class SMF extends ExportController {
 		 join :_topics t on m.ID_TOPIC = t.ID_TOPIC
 		 where m.ID_MSG <> t.ID_FIRST_MSG;
        ", $Comment_Map);
+       
+       // Media
+       $Media_Map = array(
+         'ID_ATTACH' => 'MediaID',
+         'ID_MSG' => 'ForeignID',
+         'size' => 'Size',
+         'height' => 'ImageHeight',
+         'width' => 'ImageWidth'
+      );
+      $Ex->ExportTable('Media', 
+      "select a.*,
+         concat('attachments/', a.filename) as Path,
+         concat('attachments/', b.filename) as ThumbPath,
+         if(t.ID_TOPIC is null, 'Comment', 'Discussion') as ForeignTable
+       from :_attachments a
+       left join :_attachments b on b.ID_ATTACH = a.ID_THUMB
+       left join :_topics t on a.ID_MSG = t.ID_FIRST_MSG
+       where a.attachmentType = 0
+         and a.ID_MSG > 0;", $Media_Map);
 
     // Conversations need a bit more conversion so execute a series of queries for that.
     $Ex->Query('create table :_smfpmto (

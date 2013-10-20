@@ -7,7 +7,6 @@
 
 /** Generic controller implemented by forum-specific ones */
 abstract class ExportController {
-
    /** @var array Database connection info */
    protected $DbInfo = array();
 
@@ -29,6 +28,23 @@ abstract class ExportController {
     */
    public function __construct() {
       $this->HandleInfoForm();
+      
+      $this->Ex = new ExportModel;
+      $this->Ex->Controller = $this;
+      $this->Ex->SetConnection($this->DbInfo['dbhost'], $this->DbInfo['dbuser'], $this->DbInfo['dbpass'], $this->DbInfo['dbname']);
+      $this->Ex->Prefix = $this->DbInfo['prefix'];
+      $this->Ex->Destination = $this->Param('dest', 'file');
+      $this->Ex->DestDb = $this->Param('destdb', NULL);
+      $this->Ex->TestMode = $this->Param('test', FALSE);
+      $this->Ex->UseStreaming = FALSE; //$this->UseStreaming;
+   }
+   
+   public function CdnPrefix() {
+      $Cdn = rtrim($this->Param('cdn', ''), '/');
+      if ($Cdn)
+         $Cdn .= '/';
+      
+      return $Cdn;
    }
 
    /**
@@ -40,31 +56,26 @@ abstract class ExportController {
       // Test connection
       $Msg = $this->TestDatabase();
       if($Msg === true) {
-         // Create db object
-         $Ex = new ExportModel;
-         $Ex->Controller = $this;
-         $this->Ex = $Ex;
-         $Ex->SetConnection($this->DbInfo['dbhost'], $this->DbInfo['dbuser'], $this->DbInfo['dbpass'], $this->DbInfo['dbname']);
-         $Ex->Prefix = $this->DbInfo['prefix'];
-         $Ex->Destination = $this->Param('dest', 'file');
-         $Ex->DestDb = $this->Param('destdb', NULL);
-         $Ex->TestMode = $this->Param('test', FALSE);
 
-         $Ex->UseStreaming = $this->UseStreaming;
          // Test src tables' existence structure
-         $Msg = $Ex->VerifySource($this->SourceTables);
+         $Msg = $this->Ex->VerifySource($this->SourceTables);
          if($Msg === true) {
             // Good src tables - Start dump
-            $Ex->UseCompression(TRUE);
-            $Ex->FilenamePrefix = $this->DbInfo['dbname'];
+            $this->Ex->UseCompression(TRUE);
+            $this->Ex->FilenamePrefix = $this->DbInfo['dbname'];
             set_time_limit(60*60);
-            $this->ForumExport($Ex);
+            
+//            ob_start();
+            $this->ForumExport($this->Ex);
+//            $Errors = ob_get_clean();
+            
+            $Msg = $this->Ex->Comments;
 
             // Write the results.
-            if($Ex->UseStreaming)
+            if($this->Ex->UseStreaming)
                exit;
             else
-               ViewExportResult($Ex->Comments, 'Info', $Ex->Path);
+               ViewExportResult($Msg, 'Info', $this->Ex->Path);
          }
          else
             ViewForm(array('Supported' => $Supported, 'Msg' => $Msg, 'Info' => $this->DbInfo)); // Back to form with error
@@ -109,7 +120,7 @@ abstract class ExportController {
          }
          else {
             mysql_close($C);
-            $Result = 'Could not find database &ldquo;'.$this->DbInfo['dbname'].'&rdquo;.';
+            $Result = "Could not find database '{$this->DbInfo['dbname']}'.";
          }
       }
       else

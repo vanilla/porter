@@ -16,6 +16,7 @@ class ExportModel {
    const NULL = '\N';
    const QUOTE = '"';
 
+   public $CaptureOnly = FALSE;
 
    /** @var array Any comments that have been written during the export. */
    public $Comments = array();
@@ -25,21 +26,31 @@ class ExportModel {
 
    /** @var string The charcter set to set as the connection anytime the database connects. */
    public $CharacterSet = 'utf8';
+   
+   /**
+    * @var int The chunk size when exporting large tables.
+    */
+   public $ChunkSize = 100000;
 
    /** @var array **/
    public $CurrentRow = NULL;
 
    public $Destination = 'file';
+   
+   public $DestPrefix = 'GDN_z';
+   
+   public static $EscapeSearch = array();
+   public static $EscapeReplace = array();
 
    /** @var object File pointer */
-   protected $_File = NULL;
+   public $File = NULL;
 
    /** @var string A prefix to put into an automatically generated filename. */
    public $FilenamePrefix = '';
 
    public $_Host;
-
-   protected $_Limit = 20000;
+   
+   public static $Mb = FALSE;
 
    /** @var object PDO instance */
    protected $_PDO = NULL;
@@ -56,23 +67,38 @@ class ExportModel {
    public $Prefix = '';
 
    public $Queries = array();
+   
+   protected $_QueryStructures = array();
 
    /** @var string The path to the source of the export in the case where a file is being converted. */
    public $SourcePath = '';
+   
+   /**
+    * @var string 
+    */
+   public $SourcePrefix = '';
+   
+   public $ScriptCreateTable = TRUE;
 
    /**
     * @var array Strucutes that define the format of the export tables.
     */
    protected $_Structures = array(
       'Activity' => array(
+            'ActivityType' => 'varchar(20)',
             'ActivityUserID' => 'int',
             'RegardingUserID' => 'int',
+            'NotifyUserID' => 'int',
+            'HeadlineFormat' => 'varchar(255)',
             'Story' => 'text',
+            'Format' => 'varchar(10)',
             'InsertUserID' => 'int',
-            'DateInserted' => 'datetime'),
+            'DateInserted' => 'datetime',
+            'InsertIPAddress' => 'varchar(15)'),
       'Category' => array(
             'CategoryID' => 'int',
             'Name' => 'varchar(30)',
+            'UrlCode' => 'varchar(255)',
             'Description' => 'varchar(250)',
             'ParentCategoryID' => 'int',
             'DateInserted' => 'datetime',
@@ -95,6 +121,7 @@ class ExportModel {
             'Score' => 'float'),
       'Conversation' => array(
             'ConversationID' => 'int',
+            'Subject' => 'varchar(255)',
             'FirstMessageID' => 'int',
             'DateInserted' => 'datetime',
             'InsertUserID' => 'int',
@@ -106,7 +133,8 @@ class ExportModel {
             'Body' => 'text',
             'Format' => 'varchar(20)',
             'InsertUserID' => 'int',
-            'DateInserted' => 'datetime'),
+            'DateInserted' => 'datetime',
+            'InsertIPAddress' => 'varchar(15)'),
       'Discussion' => array(
             'DiscussionID' => 'int',
             'Name' => 'varchar(100)',
@@ -125,7 +153,8 @@ class ExportModel {
             'Score' => 'float',
             'Closed' => 'tinyint',
             'Announce' => 'tinyint',
-            'Sink' => 'tinyint'),
+            'Sink' => 'tinyint',
+            'Type' => 'varchar(20)'),
       'Media' => array(
             'MediaID' => 'int',
             'Name' => 'varchar(255)',
@@ -136,10 +165,15 @@ class ExportModel {
             'InsertUserID' => 'int',
             'DateInserted' => 'datetime',
             'ForeignID' => 'int',
-            'ForeignTable' => 'varchar(24)'
+            'ForeignTable' => 'varchar(24)',
+            'ImageWidth' => 'int',
+            'ImageHeight' => 'int'
           ),
       'Permission' => array(
             'RoleID' => 'int',
+            'JunctionTable' => 'varchar(100)',
+            'JunctionColumn' => 'varchar(100)',
+            'JunctionID' => 'int',
             '_Permissions' => 'varchar(255)',
             'Garden.SignIn.Allow' => 'tinyint',
             'Garden.Activity.View' => 'tinyint',
@@ -147,6 +181,40 @@ class ExportModel {
             'Vanilla.Discussions.View' => 'tinyint',
             'Vanilla.Discussions.Add' => 'tinyint',
             'Vanilla.Comments.Add' => 'tinyint'
+          ),
+      'Poll' => array(
+            'PollID' => 'int',
+            'Name' => 'varchar(255)',
+            'DiscussionID' => 'int',
+            'Anonymous' => 'tinyint',
+            'DateInserted' => 'datetime',
+            'InsertUserID' => 'int',
+            'DateUpdated' => 'datetime',
+            'UpdateUserID' => 'int'
+          ),
+      'PollOption' => array(
+            'PollOptionID' => 'int',
+            'PollID' => 'int',
+            'Body' => 'varchar(500)',
+            'Format' => 'varchar(20)',
+            'Sort' => 'smallint',
+            'DateInserted' => 'datetime',
+            'InsertUserID' => 'int',
+            'DateUpdated' => 'datetime',
+            'UpdateUserID' => 'int'
+          ),
+      'PollVote' => array(
+            'UserID' => 'int',
+            'PollOptionID' => 'int',
+            'DateInserted' => 'datetime'
+          ),
+      'Rank' => array(
+            'RankID' => 'int',
+            'Name' => 'varchar(100)',
+            'Level' => 'smallint',
+            'Label' => 'varchar(255)',
+            'Body' => 'text',
+            'Attributes' => 'text'
           ),
       'Role' => array(
             'RoleID' => 'int',
@@ -165,8 +233,11 @@ class ExportModel {
             'UserID' => 'int',
             'Name' => 'varchar(20)',
             'Email' => 'varchar(200)',
-            'Password' => 'varbinary(34)',
+            'Password' => 'varbinary(100)',
+            'HashMethod' => 'varchar(10)',
             //'Gender' => array('m', 'f'),
+            'Title' => 'varchar(100)',
+            'Location' => 'varchar(100)',
             'Score' => 'float',
             'InviteUserID' => 'int',
             'HourOffset' => 'int',
@@ -179,9 +250,11 @@ class ExportModel {
             'DateLastActive' => 'datetime',
             'DateInserted' => 'datetime',
             'InsertIPAddress' => 'varchar(15)',
+            'LastIPAddress' => 'varchar(15)',
             'DateUpdated' => 'datetime',
             'Banned' => 'tinyint',
-            'ShowEmail' => 'tinyint'),
+            'ShowEmail' => 'tinyint',
+            'RankID' => 'int'),
       'UserAuthentication' => array(
           'ForeignUserKey' => 'varchar(255)',
           'ProviderKey' => 'varchar(64)',
@@ -191,6 +264,7 @@ class ExportModel {
       'UserConversation' => array(
             'UserID' => 'int',
             'ConversationID' => 'int',
+            'Deleted' => 'tinyint(1)',
             'LastMessageID' => 'int'),
       'UserDiscussion' => array(
             'UserID' => 'int',
@@ -202,12 +276,24 @@ class ExportModel {
             'UserID' => 'int',
             'Name' => 'varchar(255)',
             'Value' => 'text'),
+      'UserNote' => array(
+            'UserNoteID' => 'int',
+            'Type' => 'varchar(10)',
+            'UserID' => 'int',
+            'Body' => 'text',
+            'Format' => 'varchar(10)',
+            'InsertUserID' => 'int',
+            'DateInserted' => 'datetime',
+            'InsertIPAddress' => 'varchar(15)'
+         ),
       'UserRole' => array(
             'UserID' => 'int',
             'RoleID' => 'int')
    );
 
    public $TestMode = FALSE;
+   
+   public $TestLimit = 10;
 
    /**
     * @var bool Whether or not to use compression when creating the file.
@@ -221,6 +307,14 @@ class ExportModel {
     * @var bool Whether or not to stream the export the the output rather than save a file.
     */
    public $UseStreaming = FALSE;
+   
+   public function __construct() {
+      self::$Mb = function_exists('mb_detect_encoding');
+      
+      // Set the search and replace to escape strings.
+      self::$EscapeSearch = array(self::ESCAPE, self::DELIM, self::NEWLINE, self::QUOTE); // escape must go first
+      self::$EscapeReplace = array(self::ESCAPE.self::ESCAPE, self::ESCAPE.self::DELIM, self::ESCAPE.self::NEWLINE, self::ESCAPE.self::QUOTE);
+   }
 
 
    /**
@@ -239,13 +333,19 @@ class ExportModel {
 
       $fp = $this->_OpenFile();
 
-      fwrite($fp, 'Vanilla Export: '.$this->Version());
+      $Comment = 'Vanilla Export: '.$this->Version();
+      
       if($Source)
-         fwrite($fp, self::DELIM.' Source: '.$Source);
+         $Comment .= self::DELIM.' Source: '.$Source;
       foreach ($Header as $Key => $Value) {
-         fwrite($fp, self::DELIM." $Key: $Value");
+         $Comment .= self::DELIM." $Key: $Value";
       }
-      fwrite($fp, self::NEWLINE.self::NEWLINE);
+      
+      if ($this->CaptureOnly)
+         $this->Comment($Comment);
+      else
+         fwrite($fp, $Comment.self::NEWLINE.self::NEWLINE);
+     
       $this->Comment('Export Started: '.date('Y-m-d H:i:s'));
 
       return $fp;
@@ -257,9 +357,20 @@ class ExportModel {
     * @param bool $Echo Whether or not to echo the message in addition to writing it to the file.
     */
    public function Comment($Message, $Echo = TRUE) {
-      fwrite($this->_File, self::COMMENT.' '.str_replace(self::NEWLINE, self::NEWLINE.self::COMMENT.' ', $Message).self::NEWLINE);
-      if($Echo)
-         $this->Comments[] = $Message;
+      if ($this->Destination == 'file')
+         $Char = self::COMMENT;
+      else
+         $Char = '--';
+         
+      $Comment = $Char.' '.str_replace(self::NEWLINE, self::NEWLINE.self::COMMENT.' ', $Message).self::NEWLINE;
+      
+      fwrite($this->File, $Comment);
+      if($Echo) {
+         if (defined('CONSOLE'))
+            echo $Comment;
+         else
+            $this->Comments[] = $Message;
+      }
    }
 
    /**
@@ -269,21 +380,25 @@ class ExportModel {
       $this->EndTime = microtime(TRUE);
       $this->TotalTime = $this->EndTime - $this->BeginTime;
 
+      $this->Comment($this->Path);
       $this->Comment('Export Completed: '.date('Y-m-d H:i:s'));
       $this->Comment(sprintf('Elapsed Time: %s', self::FormatElapsed($this->TotalTime)));
 
+      if ($this->TestMode || $this->Controller->Param('dumpsql') || $this->CaptureOnly) {
+         $Queries = implode("\n\n", $this->Queries);
+         if ($this->Destination == 'database')
+            fwrite($this->File, $Queries);
+         else
+            $this->Comment($Queries, TRUE);
+      }
+      
       if($this->UseStreaming) {
          //ob_flush();
       } else {
          if($this->UseCompression() && function_exists('gzopen'))
-            gzclose($this->_File);
+            gzclose($this->File);
          else
-            fclose($this->_File);
-      }
-
-      if ($this->TestMode || $this->Controller->Param('dumpsql')) {
-         $Queries = '<pre>'.implode("\n\n", $this->Queries).'</pre>';
-         $this->Comment($Queries, TRUE);
+            fclose($this->File);
       }
    }
 
@@ -308,11 +423,100 @@ class ExportModel {
       $EndTime = microtime(TRUE);
       $Elapsed = self::FormatElapsed($BeginTime, $EndTime);
       $this->Comment("Exported Table: $TableName ($RowCount rows, $Elapsed)");
-      fwrite($this->_File, self::NEWLINE);
+      fwrite($this->File, self::NEWLINE);
+   }
+   
+   protected function _ExportTableImport($TableName, $Query, $Mappings = array()) {
+      // Backup the settings.
+      $DestinationBak = $this->Destination;
+      $this->Destination = 'file';
+      
+      $_FileBak = $this->File;
+      $Path = dirname(__FILE__).'/'.$TableName.'.csv';
+      $this->Comment("Exporting To: $Path");
+      $fp = fopen($Path, 'wb');
+      $this->File = $fp;
+      
+      // First export the file to a file.
+      $this->_ExportTable($TableName, $Query, $Mappings, array('NoEndline' => TRUE));
+      
+      // Now define a table to import into.
+      $this->_CreateExportTable($TableName, $Query, $Mappings);
+      
+      // Now load the data.
+      $Sql = "load data local infile '$Path' into table {$this->DestDb}.{$this->DestPrefix}$TableName
+         character set utf8
+         columns terminated by ','
+         optionally enclosed by '\"'
+         escaped by '\\\\'
+         lines terminated by '\\n'
+         ignore 2 lines";
+      $this->Query($Sql);
+      
+      // Restore the settings.
+      $this->Destination = $DestinationBak;
+      $this->File = $_FileBak;
+   }
+   
+   public function ExportBlobs($Sql, $BlobColumn, $PathColumn, $Thumbnail = FALSE) {
+      $this->Comment("Exporting blobs...");
+      
+      $Result = $this->Query($Sql);
+      $Count = 0;
+      while ($Row = mysql_fetch_assoc($Result)) {
+         // vBulletin attachment hack (can't do this in MySQL)
+         if (strpos($Row[$PathColumn], '.attach') && strpos($Row[$PathColumn], 'attachments/') !== FALSE) {
+            $PathParts = explode('/', $Row[$PathColumn]); // 3 parts
+            
+            // Split up the userid into a path, digit by digit
+            $n = strlen($PathParts[1]);
+            $DirParts = array();
+            for($i = 0; $i < $n; $i++) {
+               $DirParts[] = $PathParts[1]{$i};
+            }
+            $PathParts[1] = implode('/', $DirParts);
+            
+            // Rebuild full path
+            $Row[$PathColumn] = implode('/', $PathParts);
+         }
+         
+         $Path = $Row[$PathColumn];
+         
+         // Build path
+         if (!file_exists(dirname($Path))) {
+            $R = mkdir(dirname($Path), 0777, TRUE); 
+            if (!$R)
+               die("Could not create ".dirname($Path));
+         }
+         
+         if ($Thumbnail) {
+            $PicPath = str_replace('/avat', '/pavat', $Path);
+            $fp = fopen($PicPath, 'wb');
+         } else {
+            $fp = fopen($Path, 'wb');
+         }
+         if (!is_resource($fp))
+            die("Could not open $Path.");
+         
+         fwrite($fp, $Row[$BlobColumn]);
+         fclose($fp);
+         $this->Status('.');
+         
+         if ($Thumbnail) {
+            if ($Thumbnail === TRUE)
+               $Thumbnail = 50;
+            
+            $ThumbPath = str_replace('/avat', '/navat', $Path);
+            $this->GenerateThumbnail($PicPath, $ThumbPath, $Thumbnail, $Thumbnail);
+         }
+         $Count++;
+      }
+      $this->Status("$Count Blobs.\n");
+      $this->Comment("$Count Blobs.", FALSE);
    }
 
-   protected function _ExportTable($TableName, $Query, $Mappings = array()) {
-      $fp = $this->_File;
+   protected function _ExportTable($TableName, $Query, $Mappings = array(), $Options = array()) {
+      $fp = $this->File;
 
       // Make sure the table is valid for export.
       if (!array_key_exists($TableName, $this->_Structures)) {
@@ -326,35 +530,31 @@ class ExportModel {
          $this->_ExportTableDB($TableName, $Query, $Mappings);
          return;
       }
+      
+      // Check for a chunked query.
+      $Query = str_replace('{from}', -2000000000, $Query);
+      $Query = str_replace('{to}', 2000000000, $Query);
+      
+      if (strpos($Query, '{from}') !== FALSE) {
+         $this->_ExportTableDBChunked($TableName, $Query, $Mappings);
+         return;
+      }
 
       // If we are in test mode then limit the query.
-      if ($this->TestMode) {
+      if ($this->TestMode && $this->TestLimit) {
          $Query = rtrim($Query, ';');
          if (stripos($Query, 'select') !== FALSE && stripos($Query, 'limit') === FALSE) {
-            $Query .= ' limit 10';
+            $Query .= " limit {$this->TestLimit}";
          }
       }
 
       $Structure = $this->_Structures[$TableName];
 
-      // Set the search and replace to escape strings.
-      $EscapeSearch = array(self::ESCAPE, self::DELIM, self::NEWLINE, self::QUOTE); // escape must go first
-      $EscapeReplace = array(self::ESCAPE.self::ESCAPE, self::ESCAPE.self::DELIM, self::ESCAPE.self::NEWLINE, self::ESCAPE.self::QUOTE);
-
       $LastID = 0;
       $IDName = 'NOTSET';
       $FirstQuery = TRUE;
 
-      // Get the filters from the mappings.
-      $Filters = array();
-      foreach ($Mappings as $Column => $Mapping) {
-         if (is_array($Mapping) &&isset($Mapping['Column']) && isset($Mapping['Filter'])) {
-            $Filters[$Mapping['Column']] = $Mapping['Filter'];
-         }
-      }
-
-      $Data = $this->Query($Query, $IDName, $LastID, $this->_Limit);
-      $Mb = function_exists('mb_detect_encoding');
+      $Data = $this->Query($Query);
 
       // Loop through the data and write it to the file.
       $RowCount = 0;
@@ -365,96 +565,89 @@ class ExportModel {
             $RowCount++;
             
             if($FirstQuery) {
-               // Start with the table name.
-               fwrite($fp, 'Table: '.$TableName.self::NEWLINE);
-
                // Get the export structure.
-               $ExportStructure = $this->GetExportStructure($Row, $Structure, $Mappings);
-
-               // Build and write the table header.
-               $TableHeader = $this->_GetTableHeader($ExportStructure, $Structure);
-
-               fwrite($fp, $TableHeader.self::NEWLINE);
-
-               $Mappings = array_flip($Mappings);
+               $ExportStructure = $this->GetExportStructure($Row, $Structure, $Mappings, $TableName);
+               $RevMappings = $this->FlipMappings($Mappings);
+               $this->WriteBeginTable($fp, $TableName, $ExportStructure);
 
                $FirstQuery = FALSE;
             }
+            $this->WriteRow($fp, $Row, $ExportStructure, $RevMappings);
 
-            $First = TRUE;
-
-            // Loop through the columns in the export structure and grab their values from the row.
-            $ExRow = array();
-            foreach ($ExportStructure as $Field => $Type) {
-               // Get the value of the export.
-               if (array_key_exists($Field, $Row)) {
-                  // The column has an exact match in the export.
-                  $Value = $Row[$Field];
-               } elseif (array_key_exists($Field, $Mappings)) {
-                  // The column is mapped.
-                  $Value = $Row[$Mappings[$Field]];
-               } else {
-                  $Value = NULL;
-               }
-
-               // Check to see if there is a callback filter.
-               if (isset($Filters[$Field])) {
-                  $Callback = $Filters[$Field];
-                  $Row2 =& $Row;
-                  $Value = call_user_func($Filters[$Field], $Value, $Field, $Row2, $Column);
-                  $Row = $this->CurrentRow;
-               }
-
-               // Format the value for writing.
-               if (is_null($Value)) {
-                  $Value = self::NULL;
-               } elseif (is_numeric($Value)) {
-                  // Do nothing, formats as is.
-               } elseif (is_string($Value)) {
-
-                  // Check to see if there is a callback filter.
-                  if (isset($Filters[$Field])) {
-                     //$Value = call_user_func($Filters[$Field], $Value, $Field, $Row);
-                  } else {
-                     if($Mb && mb_detect_encoding($Value) != 'UTF-8')
-                        $Value = utf8_encode($Value);
-                  }
-
-                  $Value = str_replace(array("\r\n", "\r"), array(self::NEWLINE, self::NEWLINE), $Value);
-                  $Value = self::QUOTE
-                     .str_replace($EscapeSearch, $EscapeReplace, $Value)
-                     .self::QUOTE;
-               } elseif (is_bool($Value)) {
-                  $Value = $Value ? 1 : 0;
-               } else {
-                  // Unknown format.
-                  $Value = self::NULL;
-               }
-
-               $ExRow[] = $Value;
-            }
-            // Write the data.
-            fwrite($fp, implode(self::DELIM, $ExRow));
-            // End the record.
-            fwrite($fp, self::NEWLINE);
+//            // Loop through the columns in the export structure and grab their values from the row.
+//            $ExRow = array();
+//            foreach ($ExportStructure as $Field => $Type) {
+//               // Get the value of the export.
+//               $Value = NULL;
+//               if (array_key_exists($Field, $Mappings)) {
+//                  if (isset($Row[$Mappings[$Field]])) {
+//                     // The column is mapped.
+//                     $Value = $Row[$Mappings[$Field]];
+//                  }
+//               } elseif (array_key_exists($Field, $Row)) {
+//                  // The column has an exact match in the export.
+//                  $Value = $Row[$Field];
+//               }
+//
+//               // Check to see if there is a callback filter.
+//               if (isset($Filters[$Field])) {
+//                  $Callback = $Filters[$Field];
+//                  $Row2 =& $Row;
+//                  $Value = call_user_func($Filters[$Field], $Value, $Field, $Row2, $Column);
+//                  $Row = $this->CurrentRow;
+//               }
+//
+//               // Format the value for writing.
+//               if (is_null($Value)) {
+//                  $Value = self::NULL;
+//               } elseif (is_numeric($Value)) {
+//                  // Do nothing, formats as is.
+//               } elseif (is_string($Value)) {
+//
+//                  // Check to see if there is a callback filter.
+//                  if (isset($Filters[$Field])) {
+//                     //$Value = call_user_func($Filters[$Field], $Value, $Field, $Row);
+//                  } else {
+//                     if($Mb && mb_detect_encoding($Value) != 'UTF-8')
+//                        $Value = utf8_encode($Value);
+//                  }
+//
+//                  $Value = str_replace(array("\r\n", "\r"), array(self::NEWLINE, self::NEWLINE), $Value);
+//                  $Value = self::QUOTE
+//                     .str_replace($EscapeSearch, $EscapeReplace, $Value)
+//                     .self::QUOTE;
+//               } elseif (is_bool($Value)) {
+//                  $Value = $Value ? 1 : 0;
+//               } else {
+//                  // Unknown format.
+//                  $Value = self::NULL;
+//               }
+//
+//               $ExRow[] = $Value;
+//            }
+//            // Write the data.
+//            fwrite($fp, implode(self::DELIM, $ExRow));
+//            // End the record.
+//            fwrite($fp, self::NEWLINE);
          }
       }
       if($Data !== FALSE)
          mysql_free_result($Data);
       unset($Data);
 
-      // Write an empty line to signify the end of the table.
-      fwrite($fp, self::NEWLINE);
+      if (!isset($Options['NoEndline'])) {
+         $this->WriteEndTable($fp);
+      }
+      
       mysql_close();
 
       return $RowCount;
    }
-
-   protected function _ExportTableDB($TableName, $Query, $Mappings = array()) {
-      $DestDb = '';
-      if (isset($this->DestDb))
-         $DestDb = $this->DestDb.'.';
-
+   
+   protected function _CreateExportTable($TableName, $Query, $Mappings = array()) {
+      if (!$this->ScriptCreateTable)
+         return;
+      
       // Limit the query to grab any additional columns.
       $QueryStruct = rtrim($Query, ';').' limit 1';
       $Structure = $this->_Structures[$TableName];
@@ -471,45 +664,119 @@ class ExportModel {
          $Row = (array)$Row;
 
          // Get the export structure.
-         $ExportStructure = $this->GetExportStructure($Row, $Structure, $Mappings);
+         $ExportStructure = $this->GetExportStructure($Row, $Structure, $Mappings, $TableName);
 
-         $Mappings = array_flip($Mappings);
          break;
       }
       mysql_close($Data);
+      
+      // Build the create table statement.
+      $ColumnDefs = array();
+      foreach ($ExportStructure as $ColumnName => $Type) {
+         $ColumnDefs[] = "`$ColumnName` $Type";
+      }
+      $DestDb = '';
+      if (isset($this->DestDb))
+         $DestDb = $this->DestDb.'.';
+      
+      $this->Query("drop table if exists {$DestDb}{$this->DestPrefix}$TableName");
+      $CreateSql = "create table {$DestDb}{$this->DestPrefix}$TableName (\n  ".implode(",\n  ", $ColumnDefs)."\n) engine=innodb";
+      
+      $this->Query($CreateSql);
+   }
+
+   protected function _ExportTableDB($TableName, $Query, $Mappings = array()) {
+      if ($this->HasFilter($Mappings) || strpos($Query, 'union all') !== FALSE) {
+         $this->_ExportTableImport($TableName, $Query, $Mappings);
+         return;
+      }
+      
+      // Check for a chunked query.
+      if (strpos($Query, '{from}') !== FALSE) {
+         $this->_ExportTableDBChunked($TableName, $Query, $Mappings);
+         return;
+      }
+      
+      $DestDb = '';
+      if (isset($this->DestDb))
+         $DestDb = $this->DestDb.'.';
+
+      // Limit the query to grab any additional columns.
+      $QueryStruct = $this->GetQueryStructure($Query, $TableName);
+      $Structure = $this->_Structures[$TableName];
+      
+      $ExportStructure = $this->GetExportStructure($QueryStruct, $Structure, $Mappings, $TableName);
+
+      $Mappings = $this->FlipMappings($Mappings);
 
       // Build the create table statement.
       $ColumnDefs = array();
       foreach ($ExportStructure as $ColumnName => $Type) {
          $ColumnDefs[] = "`$ColumnName` $Type";
       }
-      $this->Query("drop table if exists {$DestDb}GDN_z$TableName");
-      $CreateSql = "create table {$DestDb}GDN_z$TableName (\n  ".implode(",\n  ", $ColumnDefs)."\n) engine=innodb";
-      $this->Query($CreateSql);
+      if ($this->ScriptCreateTable) {
+         $this->Query("drop table if exists {$DestDb}{$this->DestPrefix}$TableName");
+         $CreateSql = "create table {$DestDb}{$this->DestPrefix}$TableName (\n  ".implode(",\n  ", $ColumnDefs)."\n) engine=innodb";
+         $this->Query($CreateSql);
+      }
 
       $Query = rtrim($Query, ';');
       // Build the insert statement.
-      if ($this->TestMode) {
-         $Query .= ' limit 10';
+      if ($this->TestMode && $this->TestLimit) {
+         $Query .= " limit {$this->TestLimit}";
       }
+      
+//      echo $Query."\n\n\n";
+//      die();
+//      print_r(ParseSelect($Query));
 
       $InsertColumns = array();
       $SelectColumns = array();
-      foreach ($ExportStructure as $ColumnName => $Type) {
-         $InsertColumns[] = "`$ColumnName`";
-         
+      foreach ($ExportStructure as $ColumnName => $Type) {         
+         $InsertColumns[] = '`'.$ColumnName.'`';
          if (isset($Mappings[$ColumnName])) {
-            $SelectColumns[] = "`{$Mappings[$ColumnName]}`";
+            $SelectColumns[$ColumnName] = $Mappings[$ColumnName];
          } else {
-            $SelectColumns[] = "`{$ColumnName}`";
+            $SelectColumns[$ColumnName] = $ColumnName;
          }
       }
+//      print_r($SelectColumns);
+      
+      $Query = ReplaceSelect($Query, $SelectColumns);
 
-      $InsertSql = "insert {$DestDb}GDN_z$TableName"
+      $InsertSql = "replace {$DestDb}{$this->DestPrefix}$TableName"
          ." (\n  ".implode(",\n   ", $InsertColumns)."\n)\n"
-         ."select \n  ".implode(",\n  ", $SelectColumns)."\n"
-         ."from (\n  ".str_replace("\n", "\n  ", $Query)."\n) q";
+         .$Query;
+      
+//      die($InsertSql);
       $this->Query($InsertSql);
+   }
+   
+   protected function _ExportTableDBChunked($TableName, $Query, $Mappings = array()) {
+      // Grab the table name from the first from.
+      if (preg_match('`\sfrom\s([^\s]+)`', $Query, $Matches)) {
+         $From = $Matches[1];
+      } else {
+         trigger_error("Could not figure out table for $TableName chunking.", E_USER_WARNING);
+         return;
+      }
+      
+      $Sql = "show table status like '{$From}';";
+      $R = $this->Query($Sql, TRUE);
+      $Row = mysql_fetch_assoc($R);
+      mysql_free_result($R);
+      $Max = $Row['Auto_increment'];
+      
+      if (!$Max)
+         $Max = 2000000;
+      
+      for ($i = 0; $i < $Max; $i += $this->ChunkSize) {
+         $From = $i;
+         $To = $From + $this->ChunkSize - 1;
+         
+         $Sql = str_replace(array('{from}', '{to}'), array($From, $To), $Query);
+         $this->_ExportTableDB($TableName, $Sql, $Mappings);
+      }
    }
    
    public function FixPermissionColumns($Columns) {
@@ -518,6 +785,20 @@ class ExportModel {
          if (is_string($Value) && strpos($Value, '.') !== FALSE)
             $Value = array('Column' => $Value, 'Type' => 'tinyint(1)');
          $Result[$Index] = $Value;
+      }
+      return $Result;
+   }
+   
+   public function FlipMappings($Mappings) {
+      $Result = array();
+      foreach ($Mappings as $Column => $Mapping) {
+         if (is_string($Mapping))
+            $Result[$Mapping] = array('Column' => $Column);
+         else {
+            $Col = $Mapping['Column'];
+            $Mapping['Column'] = $Column;
+            $Result[$Col] = $Mapping;
+         }
       }
       return $Result;
    }
@@ -543,21 +824,18 @@ class ExportModel {
    }
 
    static function FormatValue($Value) {
-      static $EscapeSearch = NULL; if ($EscapeSearch === NULL) $EscapeSearch = array(self::ESCAPE, self::DELIM, self::NEWLINE, self::QUOTE); // escape must go first
-      static $EscapeReplace = NULL; if ($EscapeReplace === NULL) $EscapeReplace = array(self::ESCAPE.self::ESCAPE, self::ESCAPE.self::DELIM, self::ESCAPE.self::NEWLINE, self::ESCAPE.self::QUOTE);
-
       // Format the value for writing.
       if (is_null($Value)) {
          $Value = self::NULL;
       } elseif (is_numeric($Value)) {
          // Do nothing, formats as is.
       } elseif (is_string($Value)) {
-         if($Mb && mb_detect_encoding($Value) != 'UTF-8')
+         if(self::$Mb && mb_detect_encoding($Value) != 'UTF-8')
             $Value = utf8_encode($Value);
 
          $Value = str_replace(array("\r\n", "\r"), array(self::NEWLINE, self::NEWLINE), $Value);
          $Value = self::QUOTE
-            .str_replace($EscapeSearch, $EscapeReplace, $Value)
+            .str_replace(self::$EscapeSearch, self::$EscapeReplace, $Value)
             .self::QUOTE;
       } elseif (is_bool($Value)) {
          $Value = $Value ? 1 : 0;
@@ -566,6 +844,81 @@ class ExportModel {
          $Value = self::NULL;
       }
       return $Value;
+   }
+   
+   public function GenerateThumbnail($Path, $ThumbPath, $Height = 50, $Width = 50) {
+      list($WidthSource, $HeightSource, $Type) = getimagesize($Path);
+      
+      $XCoord = 0;
+      $YCoord = 0;
+      $HeightDiff = $HeightSource - $Height;
+      $WidthDiff = $WidthSource - $Width;
+      if ($WidthDiff > $HeightDiff) {
+         // Crop the original width down
+         $NewWidthSource = round(($Width * $HeightSource) / $Height);
+
+         // And set the original x position to the cropped start point.
+         $XCoord = round(($WidthSource - $NewWidthSource) / 2);
+         $WidthSource = $NewWidthSource;
+      } else {
+         // Crop the original height down
+         $NewHeightSource = round(($Height * $WidthSource) / $Width);
+
+         // And set the original y position to the cropped start point.
+         $YCoord = round(($HeightSource - $NewHeightSource) / 2);
+         $HeightSource = $NewHeightSource;
+      }
+      
+      switch ($Type) {
+            case 1:
+               $SourceImage = imagecreatefromgif($Path);
+            break;
+         case 2:
+               $SourceImage = imagecreatefromjpeg($Path);
+            break;
+         case 3:
+            $SourceImage = imagecreatefrompng($Path);
+            imagealphablending($SourceImage, TRUE);
+            break;
+      }
+      
+      $TargetImage = imagecreatetruecolor($Width, $Height);
+      imagecopyresampled($TargetImage, $SourceImage, 0, 0, $XCoord, $YCoord, $Width, $Height, $WidthSource, $HeightSource);
+      imagedestroy($SourceImage);
+      
+      switch ($Type) {
+         case 1:
+            imagegif($TargetImage, $ThumbPath);
+            break;
+         case 2:
+            imagejpeg($TargetImage, $ThumbPath);
+            break;
+         case 3:
+            imagepng($TargetImage, $ThumbPath);
+            break;
+      }
+      imagedestroy($TargetImage);
+//      die('</pre>foo');
+   }
+   
+   /**
+    * Execute an sql statement and return the result.
+    * 
+    * @param type $Sql
+    * @param type $IndexColumn
+    * @return type
+    */
+   public function Get($Sql, $IndexColumn = FALSE) {
+      $R = $this->_Query($Sql, TRUE);
+      $Result = array();
+      
+      while ($Row = mysql_fetch_assoc($R)) {
+         if ($IndexColumn)
+            $Result[$Row[$IndexColumn]] = $Row;
+         else
+            $Result[] = $Row;
+      }
+      return $Result;
    }
 
    public function GetCharacterSet($Table) {
@@ -637,9 +990,13 @@ class ExportModel {
       return $Prefix;
    }
 
-   public function GetExportStructure($Row, $Structure, &$Mappings) {
+   public function GetExportStructure($Row, $TableOrStructure, &$Mappings, $TableName = '_') {
       $ExportStructure = array();
-      // See what columns from the structure are in
+      
+      if (is_string($TableOrStructure))
+         $Structure = $this->_Structures[$TableOrStructure];
+      else
+         $Structure = $TableOrStructure;
 
       // See what columns to add to the end of the structure.
       foreach($Row as $Column => $X) {
@@ -656,18 +1013,37 @@ class ExportModel {
                   $DestType = $Mapping;
                }
             } elseif(is_array($Mapping)) {
+               if (!isset($Mapping['Column'])) {
+                  trigger_error("Mapping for $Column does not have a 'Column' defined.", E_USER_ERROR);
+               }
+               
                $DestColumn = $Mapping['Column'];
+               
                if (isset($Mapping['Type']))
                   $DestType = $Mapping['Type'];
                elseif(isset($Structure[$DestColumn]))
                   $DestType = $Structure[$DestColumn];
                else
                   $DestType = 'varchar(255)';
-               $Mappings[$Column] = $DestColumn;
+//               $Mappings[$Column] = $DestColumn;
             }
          } elseif(array_key_exists($Column, $Structure)) {
             $DestColumn = $Column;
             $DestType = $Structure[$Column];
+            
+            // Verify column doesn't exist in Mapping array's Column element
+            $MappingExists = FALSE;
+            foreach ($Mappings as $TestMapping) {
+               if ($TestMapping == $Column)
+                  $MappingExists = TRUE;
+               elseif (is_array($TestMapping) && array_key_exists('Column', $TestMapping) && ($TestMapping['Column'] == $Column))
+                  $MappingExists = TRUE;
+            }
+            
+            // Also add the column to the mapping.
+            if (!$MappingExists) {
+               $Mappings[$Column] = $DestColumn;
+            }
          } else {
             $DestColumn = '';
             $DestType = '';
@@ -682,9 +1058,23 @@ class ExportModel {
 
       // Add filtered mappings since filters can add new columns.
       foreach ($Mappings as $Source => $Options) {
-         if (!is_array($Options) || !isset($Options['Column']))
+         if (!is_array($Options)) {
+            // Force the mappings into the expanded array syntax for easier processing later.
+            $Mappings[$Source] = array('Column' => $Options);
             continue;
+         }
+         
+         if (!isset($Options['Column'])) {
+            trigger_error("No column for $TableName(source).$Source.", E_USER_NOTICE);
+            continue;
+         }
+         
          $DestColumn = $Options['Column'];
+         
+         if (!array_key_exists($Source, $Row) && !isset($Options['Type'])) {
+            trigger_error("No column for $TableName(source).$Source.", E_USER_NOTICE);
+         }
+         
          if (isset($ExportStructure[$DestColumn]))
             continue;
 
@@ -692,14 +1082,47 @@ class ExportModel {
             $DestType = $Structure[$DestColumn];
          elseif (isset($Options['Type']))
             $DestType = $Options['Type'];
-         else
+         else {
+            trigger_error("No column for $TableName.$DestColumn.", E_USER_NOTICE);
             continue;
+         }
 
          $ExportStructure[$DestColumn] = $DestType;
          $Mappings[$Source] = $DestColumn;
       }
 
       return $ExportStructure;
+   }
+   
+   public function GetQueryStructure($Query, $Key = FALSE) {
+      $QueryStruct = rtrim($Query, ';').' limit 1';
+      if (!$Key)
+         $Key = md5($QueryStruct);
+      if (isset($this->_QueryStructures[$Key]))
+         return $this->_QueryStructures[$Key];
+      
+      $R = $this->Query($QueryStruct, TRUE);
+      $i = 0;
+      $Result = array();
+      while ($i < mysql_num_fields($R)) {
+         $Meta = mysql_fetch_field($R, $i);
+         $Result[$Meta->name] = $Meta->table;
+         $i++;
+      }
+      $this->_QueryStructures[$Key] = $Result;
+      return $Result;
+   }
+   
+   public function GetValue($Sql, $Default) {
+      $Data = $this->Get($Sql);
+      if (count($Data) > 0) {
+         $Data = array_shift($Data); // first row
+         $Result = array_shift($Data); // first column
+         
+         return $Result;
+      } else {
+         return $Default;
+      }
    }
 
    protected function _GetTableHeader($Structure, $GlobalStructure) {
@@ -717,11 +1140,49 @@ class ExportModel {
       return $TableHeader;
    }
    
+   public function HasFilter(&$Mappings) {
+      foreach ($Mappings as $Column => $Info) {
+         if (is_array($Info) && isset($Info['Filter'])) {
+            return TRUE;
+         }
+      }
+      return FALSE;
+   }
+   
    /**
     * Decode the HTML out of a value.
     */
    public function HTMLDecoder($Value) {
-      return html_entity_decode($Value, ENT_COMPAT, 'UTF-8');
+      return html_entity_decode($Value, ENT_QUOTES, 'UTF-8');
+   }
+   
+   public function HTMLDecoderDb($TableName, $ColumnName, $PK) {
+      $Common = array('&amp;' => '&', '&lt;' => '<', '&gt;' => '>', '&apos;' => "'", '&quot;' => '"', '&#39;' => "'");
+      foreach ($Common as $From => $To) {
+         $FromQ = mysql_escape_string($From);
+         $ToQ = mysql_escape_string($To);
+         $Sql = "update :_{$TableName} set $ColumnName = replace($ColumnName, '$FromQ', '$ToQ') where $ColumnName like '%$FromQ%'";
+         
+         $this->Query($Sql);
+      }
+      
+      // Now decode the remaining rows.
+      $Sql = "select * from :_$TableName where $ColumnName like '%&%;%'";
+      $Result = $this->Query($Sql, TRUE);
+      while ($Row = mysql_fetch_assoc($Result)) {
+         $From = $Row[$ColumnName];
+         $To = $this->HTMLDecoder($From);
+         
+         if ($From != $To) {
+            $ToQ = mysql_escape_string($To);
+            $Sql = "update :_{$TableName} set $ColumnName = '$ToQ' where $PK = {$Row[$PK]}";
+            $this->Query($Sql, TRUE);
+         }
+      }
+   }
+   
+   public function NotFilter($Value) {
+      return (int)(!$Value);
    }
 
     /**
@@ -736,32 +1197,32 @@ class ExportModel {
 
 
    protected function _OpenFile() {
-      if($this->UseStreaming) {
-         /** Setup the output to stream the file. */
-
-         // required for IE, otherwise Content-Disposition may be ignored
-         if(ini_get('zlib.output_compression'))
-            ini_set('zlib.output_compression', 'Off');
-
-         @ob_end_clean();
-
-         
-         $fp = fopen('php://output', 'ab');
-         header("Content-Disposition: attachment; filename=\"{$this->Path}\"");
-         header('Content-Type: text/plain');
-         header("Content-Transfer-Encoding: binary");
-         header('Accept-Ranges: bytes');
-         header("Cache-control: private");
-         header('Pragma: private');
-         header("Expires: Mon, 26 Jul 1997 05:00:00 GMT");
-      } else {
+//      if($this->UseStreaming) {
+//         /** Setup the output to stream the file. */
+//
+//         // required for IE, otherwise Content-Disposition may be ignored
+//         if(ini_get('zlib.output_compression'))
+//            ini_set('zlib.output_compression', 'Off');
+//
+//         @ob_end_clean();
+//
+//         
+//         $fp = fopen('php://output', 'ab');
+//         header("Content-Disposition: attachment; filename=\"{$this->Path}\"");
+//         header('Content-Type: text/plain');
+//         header("Content-Transfer-Encoding: binary");
+//         header('Accept-Ranges: bytes');
+//         header("Cache-control: private");
+//         header('Pragma: private');
+//         header("Expires: Mon, 26 Jul 1997 05:00:00 GMT");
+//      } else {
          $this->Path = str_replace(' ', '_', $this->Path);
          if($this->UseCompression())
             $fp = gzopen($this->Path, 'wb');
          else
             $fp = fopen($this->Path, 'wb');
-      }
-      $this->_File = $fp;
+//      }
+      $this->File = $fp;
       return $fp;
    }
 
@@ -771,28 +1232,59 @@ class ExportModel {
     * @return resource The query cursor.
     */
    public function Query($Query, $Buffer = FALSE) {
+      if (!preg_match('`limit 1;$`', $Query))
+         $this->Queries[] = $Query;
+         
+      if ($this->Destination == 'database' && $this->CaptureOnly) {
+         if (!preg_match('`^\s*select|show|describe|create`', $Query))
+            return 'SKIPPED';
+      }
+
+      return $this->_Query($Query, $Buffer);
+   }
+   
+   protected function _Query($Sql, $Buffer = FALSE) {
       if (isset($this->_LastResult) && is_resource($this->_LastResult))
          mysql_free_result($this->_LastResult);
-      $Query = str_replace(':_', $this->Prefix, $Query); // replace prefix.
-      $Query = rtrim($Query, ';').';';
-      $this->Queries[] = $Query;
-
+      $Sql = str_replace(':_', $this->Prefix, $Sql); // replace prefix.
+      if ($this->SourcePrefix) {
+         $Sql = preg_replace("`\b{$this->SourcePrefix}`", $this->Prefix, $Sql); // replace prefix.
+      }
+      
+      $Sql = rtrim($Sql, ';').';';
+      
       $Connection = mysql_connect($this->_Host, $this->_Username, $this->_Password);
       mysql_select_db($this->_DbName);
       mysql_query("set names {$this->CharacterSet}");
+      
       if ($Buffer)
-         $Result = mysql_query($Query, $Connection);
+         $Result = mysql_query($Sql, $Connection);
       else {
-         $Result = mysql_unbuffered_query($Query, $Connection);
+         $Result = mysql_unbuffered_query($Sql, $Connection);
          if (is_resource($Result))
             $this->_LastResult = $Result;
       }
 
       if ($Result === FALSE) {
+         echo '<pre>', 
+            htmlspecialchars($Sql), 
+            htmlspecialchars(mysql_error($Connection)),
+            '</pre>';
          trigger_error(mysql_error($Connection));
       }
       
       return $Result;
+   }
+   
+   public function QueryN($SqlList) {
+      if (!is_array($SqlList))
+         $SqlList = explode(';', $SqlList);
+      
+      foreach ($SqlList as $Sql) {
+         $Sql = trim($Sql);
+         if ($Sql)
+            $this->Query($Sql);
+      }
    }
    
    public function SetConnection($Host = NULL, $Username = NULL, $Password = NULL, $DbName = NULL) {
@@ -800,6 +1292,11 @@ class ExportModel {
       $this->_Username = $Username;
       $this->_Password = $Password;
       $this->_DbName = $DbName;
+   }
+   
+   public function Status($Msg) {
+      if (defined('CONSOLE'))
+         echo $Msg;
    }
 
    /**
@@ -811,6 +1308,17 @@ class ExportModel {
    public function Structures() {
       return $this->_Structures;
    }
+   
+   public function TimestampToDate($Value) {
+      if ($Value == NULL)
+         return NULL;
+      else
+         return gmdate('Y-m-d H:i:s', $Value);
+   }
+   
+   public function TimestampToDateDb($Value) {
+      
+   }
 
    /**
     * Whether or not to use compression on the output file.
@@ -820,8 +1328,7 @@ class ExportModel {
    public function UseCompression($Value = NULL) {
       if($Value !== NULL)
          $this->_UseCompression = $Value;
-
-      return $this->_UseCompression && !$this->UseStreaming && function_exists('gzopen');
+      return $this->_UseCompression && $this->Destination == 'file' && !$this->UseStreaming && function_exists('gzopen');
    }
 
    /**
@@ -844,23 +1351,47 @@ class ExportModel {
     *  - array: The names of the missing columns if one or more columns don't exist.
     */
    public function Exists($Table, $Columns = array()) {
-      $Desc = $this->Query('describe :_'.$Table);
-      if ($Desc === false)
-         return false;
-
+      static $_Exists = array();
+      
+      if (!isset($_Exists[$Table])) {
+         $Result = $this->Query("show table status like ':_$Table'", TRUE);
+         if (!$Result) {
+            $_Exists[$Table] = FALSE;
+         } elseif (!mysql_fetch_assoc($Result)) {
+            $_Exists[$Table] = FALSE;
+         } else {
+            mysql_free_result($Result);
+            $Desc = $this->Query('describe :_'.$Table);
+            if ($Desc === false) {
+               $_Exists[$Table] = FALSE;
+            } else {
+               if (is_string($Desc))
+                  die($Desc);
+               
+               $Cols = array();
+               while (($TD = mysql_fetch_assoc($Desc)) !== false) {
+                  $Cols[$TD['Field']] = $TD;
+               }
+               mysql_free_result($Desc);
+               $_Exists[$Table] = $Cols;
+            }
+         }
+      }
+      
+      if ($_Exists[$Table] == FALSE)
+         return FALSE;
+      
+      $Columns = (array)$Columns;
+      
       if (count($Columns) == 0)
          return true;
       
-      $Cols = array();
       $Missing = array();
-      while (($TD = mysql_fetch_assoc($Desc)) !== false) {
-         $Cols[] = $TD['Field'];
-      }
+      $Cols = array_keys($_Exists[$Table]);
       foreach ($Columns as $Column) {
          if (!in_array($Column, $Cols))
             $Missing[] = $Column;
       }
-      mysql_free_result($Desc);
       return count($Missing) == 0 ? true : $Missing;
    }
 
@@ -928,10 +1459,10 @@ class ExportModel {
       }
    }
 
-   public function WriteBeginTable($fp, $TableName, $Columns) {
+   public function WriteBeginTable($fp, $TableName, $ExportStructure) {
       $TableHeader = '';
 
-      foreach($Columns as $Key => $Value) {
+      foreach($ExportStructure as $Key => $Value) {
          if (is_numeric($Key)) {
             $Column = $Value;
             $Type = '';
@@ -951,7 +1482,104 @@ class ExportModel {
 
       fwrite($fp, 'Table: '.$TableName.self::NEWLINE);
       fwrite($fp, $TableHeader.self::NEWLINE);
-      
    }
+   
+   public function WriteEndTable($fp) {
+      fwrite($fp, self::NEWLINE);
+   }
+   
+   public function WriteRow($fp, $Row, $ExportStructure, $RevMappings) {
+      $this->CurrentRow =& $Row;
+      
+      // Loop through the columns in the export structure and grab their values from the row.
+      $ExRow = array();
+      foreach ($ExportStructure as $Field => $Type) {
+         // Get the value of the export.
+         $Value = NULL;
+         if (isset($RevMappings[$Field]) && isset($Row[$RevMappings[$Field]['Column']])) {
+            // The column is mapped.
+            $Value = $Row[$RevMappings[$Field]['Column']];
+         } elseif (array_key_exists($Field, $Row)) {
+            // The column has an exact match in the export.
+            $Value = $Row[$Field];
+         }
+
+         // Check to see if there is a callback filter.
+         $Filtered = FALSE;
+         if (isset($RevMappings[$Field]['Filter'])) {
+            $Callback = $RevMappings[$Field]['Filter'];
+            
+            $Row2 =& $Row;
+            $Value = call_user_func($Callback, $Value, $Field, $Row2, $Field);
+            $Row = $this->CurrentRow;
+            $Filtered = TRUE;
+         }
+
+         // Format the value for writing.
+         if (is_null($Value)) {
+            $Value = self::NULL;
+         } elseif (is_numeric($Value)) {
+            // Do nothing, formats as is.
+         } elseif (is_string($Value)) {
+            // Check to see if there is a callback filter.
+            if (!isset($RevMappings[$Field])) {
+               //$Value = call_user_func($Filters[$Field], $Value, $Field, $Row);
+            } else {
+               if(self::$Mb && mb_detect_encoding($Value) != 'UTF-8')
+                  $Value = utf8_encode($Value);
+            }
+
+            $Value = str_replace(array("\r\n", "\r"), array(self::NEWLINE, self::NEWLINE), $Value);
+            $Value = self::QUOTE
+               .str_replace(self::$EscapeSearch, self::$EscapeReplace, $Value)
+               .self::QUOTE;
+         } elseif (is_bool($Value)) {
+            $Value = $Value ? 1 : 0;
+         } else {
+            // Unknown format.
+            $Value = self::NULL;
+         }
+
+         $ExRow[] = $Value;
+      }
+      // Write the data.
+      fwrite($fp, implode(self::DELIM, $ExRow));
+      // End the record.
+      fwrite($fp, self::NEWLINE);
+   }
+   
+   public static function FileExtension($ColumnName) {
+      return "right($ColumnName, instr(reverse($ColumnName), '.'))";
+   }
+   
+   public function ForceIP4($ip) {
+      if (preg_match('`(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})`', $ip, $m))
+         $ip = $m[1];
+      else
+         $ip = null;
+      
+      return $ip;
+   }
+   
+   public function UrlDecode($Value) {
+      return urldecode($Value);
+   }
+}
+
+ function TimestampToDate($Value) {
+   if ($Value == NULL)
+      return NULL;
+   else
+      return gmdate('Y-m-d H:i:s', $Value);
+}
+
+function HTMLDecoder($Value) {
+   return html_entity_decode($Value, ENT_QUOTES, 'UTF-8');
+}
+
+function long2ipf($Value) {
+   if (!$Value)
+      return NULL;
+   return long2ip($Value);
 }
 ?>
