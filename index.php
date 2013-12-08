@@ -45,7 +45,7 @@ include_once 'functions.commandline.php';
 
 // Make sure a default time zone is set
 if (ini_get('date.timezone') == '')
-   date_default_timezone_set('America/Montreal');
+   date_default_timezone_set('Asia/Taipei');
 
 if (PHP_SAPI == 'cli')
    define('CONSOLE', TRUE);
