@@ -456,8 +456,8 @@ join z_pmgroup g
         $Media_Map = array(
             'attach_id' => 'MediaID',
             'real_filename' => 'Name',
-            'thumb_path' => array('Column' => 'ThumbPath', 'Filter' => array($this, 'BuildMediaPath')),
-            'thumb_width' => array('Column' => 'ThumbWidth', 'Filter' => array($this, 'BuildMediaPath')),
+            'thumb_path' => array('Column' => 'ThumbPath', 'Filter' => array($this, 'FilterThumbnailData')),
+            'thumb_width' => array('Column' => 'ThumbWidth', 'Filter' => array($this, 'FilterThumbnailData')),
             'post_id' => 'InsertUserID',
             'mimetype' => 'Type',
             'filesize' => 'Size',
@@ -574,7 +574,7 @@ join :_topics t
      * @param array $Row Contents of the current record.
      * @return current value of the field or null if the file is not an image.
      */
-    public function BuildMediaPath($Value, $Field, $Row) {
+    public function FilterThumbnailData($Value, $Field, $Row) {
         if (strpos($Row['mimetype'], 'image/') === 0) {
             return $Value;
         } else {
