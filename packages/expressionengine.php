@@ -199,7 +199,7 @@ class ExpressionEngine extends ExportController {
         $Ex->ExportTable('Media', "
          SELECT
             concat('imported/', filename) AS Path,
-            concat('imported/', filename) as thumb_path,,
+            concat('imported/', filename) as thumb_path,
             128 as thumb_width,
             CASE WHEN post_id > 0 THEN post_id ELSE topic_id END AS ForeignID,
             CASE WHEN post_id > 0 THEN 'comment' ELSE 'discussion' END AS ForeignTable,
