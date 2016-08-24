@@ -39,15 +39,22 @@ abstract class ExportController {
             $this->dbInfo['dbname']
         );
 
+        $this->ex->prefix = '';
+
         // That's not sexy but it gets the job done :D
         $lcClassName = strtolower(get_class($this));
         $hasDefaultPrefix = !empty($supported[$lcClassName]['prefix']);
 
         if (isset($this->dbInfo['prefix'])) {
-            $this->ex->prefix = $this->dbInfo['prefix'];
-        } elseif ($hasDefaultPrefix) {
-            $this->ex->prefix = $supported[$lcClassName]['prefix'];
+            if ($this->dbInfo['prefix'] === 'PACKAGE_DEFAULT') {
+                if ($hasDefaultPrefix) {
+                    $this->ex->prefix = $supported[$lcClassName]['prefix'];
+                }
+            } else {
+                $this->ex->prefix = $this->dbInfo['prefix'];
+            }
         }
+
         $this->ex->destination = $this->param('dest', 'file');
         $this->ex->destDb = $this->param('destdb', null);
         $this->ex->testMode = $this->param('test', false);
@@ -102,7 +109,7 @@ abstract class ExportController {
                 // Good src tables - Start dump
                 $this->ex->useCompression(true);
                 $this->ex->filenamePrefix = $this->dbInfo['dbname'];
-                set_time_limit(60 * 60);
+                increaseMaxExecutionTime(3600);
 
 //            ob_start();
                 $this->forumExport($this->ex);
@@ -131,7 +138,7 @@ abstract class ExportController {
             'dbpass' => $_POST['dbpass'],
             'dbname' => $_POST['dbname'],
             'type' => $_POST['type'],
-            'prefix' => isset($_POST['prefix']) ? preg_replace('/[^A-Za-z0-9_-]/', '', $_POST['prefix']) : null,
+            'prefix' => !isset($_POST['emptyprefix']) ? preg_replace('/[^A-Za-z0-9_-]/', '', $_POST['prefix']) : null,
         );
     }
 

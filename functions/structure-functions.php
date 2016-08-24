@@ -121,7 +121,9 @@ function vanillaStructure() {
             'LastDateInserted' => 'datetime',
             'AllowedDiscussionTypes' => 'varchar(255)',
             'DefaultDiscussionType' => 'varchar(10)',
-            'AllowGroups' => 'tinyint'
+            'AllowGroups' => 'tinyint',
+            'IdeationType' => 'varchar(255)', // up, up-down
+            'Score' => 'float',
         ),
         'Comment' => array(
             'CommentID' => 'int',
@@ -138,7 +140,8 @@ function vanillaStructure() {
             'UpdateIPAddress' => 'varchar(15)',
             'Flag' => 'tinyint',
             'Score' => 'float',
-            'Attributes' => 'text'
+            'Attributes' => 'text',
+            'QnA' => 'varchar(255)', // 'Accepted', 'Rejected'
         ),
         'Conversation' => array(
             'ConversationID' => 'int',
@@ -195,7 +198,8 @@ function vanillaStructure() {
             'Score' => 'float',
             'Attributes' => 'text',
             'RegardingID' => 'int',
-            'GroupID' => 'int'
+            'GroupID' => 'int',
+            'QnA' => 'varchar(255)', // 'Accepted', 'Answered', 'Rejected', 'Unanswered',
         ),
         'Draft' => array(
             'DraftID' => 'int',
@@ -445,6 +449,13 @@ function vanillaStructure() {
             'UserID' => 'int',
             'CountSpam' => 'smallint',
             'CountDeletedSpam' => 'smallint'
+        ),
+        'Status' => array( // Ideation
+            'StatusID' => 'int',
+            'Name' => 'varchar(100)',
+            'State' => 'varchar(255)', // Open, Closed
+            'TagID' => 'int',
+            'IsDefault' => 'tinyint',
         ),
         'Tag' => array(
             'TagID' => 'int',
