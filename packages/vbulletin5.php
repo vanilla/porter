@@ -385,7 +385,7 @@ class VBulletin5 extends VBulletin {
                 left join :_contenttype ct on n.contenttypeid = ct.contenttypeid
                 left join :_nodeview v on v.nodeid = n.nodeid
                 left join :_text t on t.nodeid = n.nodeid
-            where ct.class = 'Text'
+            where ct.class IN ('Text', 'Link', 'Gallery', 'Video')
                 and n.showpublished = 1
                 and parentid in (".implode(',', $categoryIDs).")
         ;";
