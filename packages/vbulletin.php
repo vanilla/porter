@@ -502,7 +502,7 @@ class VBulletin extends ExportController {
         $discussion_Map = array(
             'title' => array('Column' => 'Name', 'Filter' => 'HTMLDecoder'),
             'pagetext' => array('Column' => 'Body', 'Filter' => function ($value) {
-                    return preg_replace('~\[ATTACH=CONFIG\]\d+\[\/ATTACH\]~i', '', $value);
+                    return $value;
                 }
             ),
         );
@@ -547,7 +547,7 @@ class VBulletin extends ExportController {
         // Comments
         $comment_Map = array(
             'pagetext' => array('Column' => 'Body', 'Filter' => function ($value) {
-                    return preg_replace('~\[ATTACH=CONFIG\]\d+\[\/ATTACH\]~i', '', $value);
+                    return $value;
                 }
             ),
         );
