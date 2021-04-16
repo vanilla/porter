@@ -58,6 +58,7 @@ $supported['vbulletin']['features'] = array(
     'Signatures' => 1,
     'Ranks' => 1,
     'Polls' => 1,
+    'Tags' => 1,
 );
 
 /**
@@ -79,7 +80,6 @@ class VBulletin extends ExportController {
             else null
         end as customphoto
     ";
-
     /* @var array Default permissions to map. */
     public static $permissions = array(
 
@@ -189,6 +189,7 @@ class VBulletin extends ExportController {
      * @param ExportModel $ex
      */
     protected function forumExport($ex) {
+
         // Allow limited export of 1 category via ?forumid=ID
         $forumID = $this->param('forumid');
         if ($forumID) {
@@ -215,6 +216,7 @@ class VBulletin extends ExportController {
 
             return;
         }
+
         // Check to see if there is a max date.
         $minDate = $this->param('mindate');
         if ($minDate) {
@@ -225,8 +227,8 @@ class VBulletin extends ExportController {
 
         $cdn = $this->param('cdn', '');
 
-        // Grab all of the ranks.
-        $ranks = $ex->get("select * from :_usertitle order by minposts desc", 'usertitleid');
+        // Ranks
+        $ranks = $this->exportRanks();
 
         // Users
         $user_Map = array(
@@ -257,6 +259,8 @@ class VBulletin extends ExportController {
         } else {
             $user_Map['customphoto'] = 'Photo';
         }
+
+        $this->_exportPolls();
 
         $ex->exportTable('User', "
             select
@@ -289,6 +293,7 @@ class VBulletin extends ExportController {
                 left join :_userban ub on u.userid = ub.userid and ub.liftdate <= now()
         ", $user_Map);  // ":_" will be replace by database prefix
 
+        die();
         // Roles
         $role_Map = array(
             'usergroupid' => 'RoleID',
@@ -369,7 +374,7 @@ class VBulletin extends ExportController {
         if ($ex->exists('phrase', array('product', 'fieldname')) === true) {
             # Dynamic vB user data (userfield)
             $profileFields = $ex->query("
-                select
+                select distinct
                     varname,
                     text
                 from :_phrase
@@ -424,45 +429,9 @@ class VBulletin extends ExportController {
             from VbulletinUserMeta
         ");
 
-        // Ranks
-        $rank_Map = array(
-            'usertitleid' => 'RankID',
-            'title' => 'Name',
-            'title2' => 'Label',
-            'minposts' => array(
-                'Column' => 'Attributes',
-                'Filter' => function ($value) {
-                    $result = array(
-                        'Criteria' => array(
-                            'CountPosts' => $value
-                        )
-                    );
-
-                    return serialize($result);
-                }
-            ),
-            'level' => array(
-                'Column' => 'Level',
-                'Filter' => function ($value) {
-                    static $level = 1;
-
-                    return $level++;
-                }
-            )
-        );
-        $ex->exportTable('Rank', "
-            select
-                ut.*,
-                ut.title as title2,
-                0 as level
-            from :_usertitle as ut
-            order by ut.minposts
-        ", $rank_Map);
-
-
         // Categories
         $category_Map = array(
-            'title' => array('Column' => 'Name', 'Filter' => 'HTMLDecoder'),
+            'title' => array('Column' => 'Name', 'Filter' => array($this, 'htmlDecode')),
             'displayorder' => array('Column' => 'Sort', 'Type' => 'int'),
         );
         $ex->exportTable('Category', "
@@ -500,10 +469,10 @@ class VBulletin extends ExportController {
 
         // Discussions
         $discussion_Map = array(
-            'title' => array('Column' => 'Name', 'Filter' => 'HTMLDecoder'),
+            'title' => array('Column' => 'Name', 'Filter' => array($this, 'htmlDecode')),
             'pagetext' => array('Column' => 'Body', 'Filter' => function ($value) {
-                    return preg_replace('~\[ATTACH=CONFIG\]\d+\[\/ATTACH\]~i', '', $value);
-                }
+                return preg_replace('~\[ATTACH=CONFIG\]\d+\[\/ATTACH\]~i', '', $value);
+            }
             ),
         );
 
@@ -524,6 +493,7 @@ class VBulletin extends ExportController {
                 t.postuserid as InsertUserID,
                 t.postuserid as UpdateUserID,
                 t.views as CountViews,
+                t.sticky as Announce,
                 t.title,
                 p.postid as ForeignID,
                 p.ipaddress as InsertIPAddress,
@@ -547,8 +517,8 @@ class VBulletin extends ExportController {
         // Comments
         $comment_Map = array(
             'pagetext' => array('Column' => 'Body', 'Filter' => function ($value) {
-                    return preg_replace('~\[ATTACH=CONFIG\]\d+\[\/ATTACH\]~i', '', $value);
-                }
+                return preg_replace('~\[ATTACH=CONFIG\]\d+\[\/ATTACH\]~i', '', $value);
+            }
             ),
         );
         if ($minDiscussionID) {
@@ -598,18 +568,6 @@ class VBulletin extends ExportController {
                 $threadReadJoin
                 $minDiscussionWhere
         ");
-        /*$ex->exportTable('UserDiscussion', "
-            select
-                tr.userid as UserID,
-                tr.threadid as DiscussionID,
-                from_unixtime(tr.readtime) as DateLastViewed,
-                case
-                    when st.threadid is not null then 1
-                    else 0
-                end as Bookmarked
-            from :_threadread tr
-            left join :_subscribethread st on tr.userid = st.userid and tr.threadid = st.threadid
-        ");*/
 
         // Activity (from visitor messages in vBulletin 3.8+)
         if ($ex->exists('visitormessage') === true) {
@@ -642,7 +600,60 @@ class VBulletin extends ExportController {
             ", $activity_Map);
         }
 
-        $this->_exportConversations($minDate);
+        $conversation_Map = array();
+        $ex->exportTable('Conversation', "
+            select
+                p.parentpmid as ConversationID,
+                 replace(t.title, 'Re: ', '') as Subject,
+                t.fromuserid as InsertUserID,
+                from_unixtime(t.dateline),
+                t.pmtextid as FirstMessageID
+            from
+            (select
+                 parentpmid,
+                min(p.pmtextid) as pmtextid
+            from pm p
+            where parentpmid <> 0
+            group by parentpmid)	p
+            join pmtext t on t.pmtextid = p.pmtextid
+        ", $conversation_Map);
+
+        $conversationMessage_Map = array();
+        $ex->exportTable('ConversationMessage', "
+            select distinct
+                t.pmtextid,
+                p.parentpmid as ConversationID,
+                t.message as Body,
+                'BBCode' as Format,
+                t.fromuserid as InsertUserID,
+                from_unixtime(t.dateline) as DateInserted
+            from pmtext t
+            join pm p on p.parentpmid > 0 and t.pmtextid = p.pmtextid
+        ", $conversationMessage_Map);
+
+        // User Conversation.
+        $userConversation_Map = array();
+        $ex->exportTable('UserConversation', "
+            select distinct UserID, ConversationID, from_unixtime(max(DateLastViewed)) as DateLastViewed
+            from (
+            select distinct
+                t.fromuserid as UserID,
+                pm.parentpmid as ConversationID,
+                       if(pm.messageread > 0, dateline, 0) as DateLastViewed
+            from pmtext t
+            join pm on pm.parentpmid > 0 and t.pmtextid = pm.pmtextid
+
+            union
+
+            select distinct
+                pm.userid as UserID,
+                pm.parentpmid as ConversationID,
+                       if(pm.messageread > 0, dateline, 0) as DateLastViewed
+            from pmtext t
+            join pm on pm.parentpmid > 0 and t.pmtextid = pm.pmtextid
+            ) tmp
+            group by UserID, ConversationID
+        ", $userConversation_Map);
 
         $this->_exportPolls();
 
@@ -698,6 +709,51 @@ class VBulletin extends ExportController {
             }
         }
 
+        // Tags
+        $ex->exportTable('Tag',"
+            select
+                tagid as TagID,
+                replace(lower(tagtext), ' ', '-') as Name,
+                tagtext as FullName ,
+                from_unixtime(dateline) as DateInserted
+            from :_tag
+        ");
+
+        $ex->exportTable('TagDiscussion',"
+            select
+                tagid as TagID,
+                threadid as DiscussionID,
+                -1 as CategoryID,
+                from_unixtime(dateline) as DateInserted
+            from :_tagthread
+        ");
+
+        // Reactions
+        $ex->exportTable('UserTag', "
+            select
+                if(t.threadid is not null, 'Discussion', 'Comment') as RecordType,
+                if(t.threadid is not null, t.threadid, p.postid) as RecordID,
+                -1 as TagID,
+                p.userid as UserID,
+                from_unixtime(p.date) as DateInserted,
+                1 as Total
+            from :_post_thanks p
+            left join :_thread t on p.postid = t.firstpostid
+
+            union
+
+            select
+                concat(if(t.threadid is not null, 'Discussion', 'Comment'), '-Total') as RecordType,
+                if(t.threadid is not null, t.threadid, p.postid) as RecordID,
+                11 as TagID,
+                p.userid as UserID,
+                now() as DateInserted,
+                p.total as Total
+            from (select postid, count(postid) as total, min(userid) as userid from :_post_thanks group by postid) p
+            left join :_thread t on p.postid = t.firstpostid
+        ");
+
+
         // End
         $ex->endExport();
     }
@@ -721,8 +777,8 @@ class VBulletin extends ExportController {
             create table z_pmto (
                 pmtextid int unsigned,
                 userid int unsigned,
-                primary key(pmtextid, userid)
-        )");
+                primary key(pmtextid, userid))
+        ");
 
         if ($minID) {
             $minWhere = "where pmtextid > $minID";
@@ -770,7 +826,7 @@ class VBulletin extends ExportController {
         $ex->query("
             create table z_pmto2 (
                 pmtextid int unsigned,
-                userids varchar(250),
+                userids TEXT,
                 primary key (pmtextid)
             );
         ");
@@ -790,7 +846,7 @@ class VBulletin extends ExportController {
                 pmtextid int unsigned,
                 title varchar(250),
                 title2 varchar(250),
-                userids varchar(250),
+                userids TEXT,
                 group_id int unsigned
             );
         ");
@@ -852,14 +908,7 @@ class VBulletin extends ExportController {
             'fromuserid' => 'InsertUserID',
             'title2' => array('Column' => 'Subject', 'Type' => 'varchar(250)')
         );
-        $ex->exportTable('Conversation', "
-            select
-                pm.*,
-                g.title as title2,
-                from_unixtime(pm.dateline) as DateInserted
-            from :_pmtext pm
-                join z_pmgroup g on g.group_id = pm.pmtextid
-        ", $conversation_Map);
+
 
         // Coversation Messages.
         $conversationMessage_Map = array(
@@ -1161,8 +1210,6 @@ class VBulletin extends ExportController {
 
     protected function _exportPolls() {
         $ex = $this->ex;
-        $fp = $ex->file;
-//      $fp = fopen('php://output', 'ab');
 
         $poll_Map = array(
             'pollid' => 'PollID',
@@ -1182,58 +1229,146 @@ class VBulletin extends ExportController {
                 join :_thread t on p.pollid = t.pollid
             ", $poll_Map);
 
-        $pollOption_Map = array(
-            'optionid' => 'PollOptionID', // calc
-            'pollid' => 'PollID',
-            'body' => 'Body', // calc
-            'sort' => 'Sort', // calc
-            'dateline' => array('Column' => 'DateInserted', 'Filter' => 'timestampToDate'),
-            'postuserid' => 'InsertUserID'
-        );
+
+        // Poll options
+        $ex->query("drop table if exists zPollOptions;");
+        $ex->query("
+            create table zPollOptions (
+                PollOptionID int(11) NOT NULL AUTO_INCREMENT,
+                PollID int(11),
+                Body varchar(250),
+                Sort int(11),
+                DateInserted int(11),
+                InsertUserID int(11),
+                PRIMARY KEY (`PollOptionID`)
+            );
+        ");
+
         $sql = "
             select
                 p.*,
-                'BBCode' as Format,
                 t.postuserid
             from :_poll p
-                join :_thread t on p.pollid = t.pollid
+            join :_thread t on p.pollid = t.pollid
         ";
-
-        // Some custom programming needs to be done here so let's do that.
-        $exportStructure = $ex->getExportStructure($pollOption_Map, 'PollOption', $pollOption_Map);
-        $revMappings = $ex->flipMappings($pollOption_Map);
-
-        $ex->writeBeginTable($fp, 'PollOption', $exportStructure);
 
         $r = $ex->query($sql);
         $rowCount = 0;
+        $sql  = "replace into zPollOptions (
+                    PollOptionID,
+                    PollID,
+                    Body,
+                    Sort,
+                    DateInserted,
+                    InsertUserID
+                ) values ";
         while ($row = $r->nextResultRow()) {
             $options = explode('|||', $row['options']);
 
             foreach ($options as $i => $option) {
-                $row['optionid'] = $row['pollid'] * 1000 + $i + 1;
-                $row['body'] = $option;
-                $row['sort'] = $i;
-
-                $ex->writeRow($fp, $row, $exportStructure, $revMappings);
-
                 $rowCount++;
+                $option = addslashes($option);
+
+                $sql .= "(
+                        {$rowCount},
+                        {$row['pollid']},
+                        '{$option}',
+                        {$i},
+                        {$row['dateline']},
+                        {$row['postuserid']}
+                    ),";
             }
         }
-        $ex->writeEndTable($fp);
-        $ex->comment("Exported Table: PollOption ($rowCount rows)");
 
-        $pollVote_Map = array(
-            'userid' => 'UserID',
-            'optionid' => 'PollOptionID',
-            'votedate' => array('Column' => 'DateInserted', 'Filter' => 'timestampToDate')
-        );
+        if ($rowCount > 0) {
+            $ex->query(substr($sql, 0, -1));
+        }
+
+        $ex->exportTable('PollOption', "
+            select
+                PollOptionID,
+                PollID,
+                Body,
+                'BBCdode' as Format,
+                Sort,
+                FROM_UNIXTIME(DateInserted),
+                InsertUserID
+            from zPollOptions
+        ");
+
         $ex->exportTable('PollVote', "
             select
-                pv.*,
-                pollid * 1000 + voteoption as optionid
+                pv.userid as UserID,
+                zp.PollOptionID,
+                pv.pollid
             from :_pollvote pv
-        ", $pollVote_Map);
+            join zPollOptions zp on pv.pollid = zp.PollID and pv.voteoption = zp.sort
+        ");
+    }
+
+    public function exportRanks() : array {
+        $ex = $this->ex;
+
+        $rank = $ex->query("select count(*) from ranks");
+
+        if($rank->nextResultRow() > 0) {
+
+            $ranks = $ex->get("select rankid as RankID, minposts
+                                   from :_ranks
+                                   where minposts > 0
+                                   order by minposts desc");
+
+            $ex->exportTable('Rank', "select
+                                    rankid as RankID,
+                                    rankimg as Name,
+                                    rankimg as Label,
+                                    NULL as Body,
+                                    concat('{\"Criteria\":{\"CountPosts\":\"', minposts, '\"}}') as Attributes
+                                    from :_ranks
+                                    where minposts > 0
+            ");
+
+
+        } else {
+            $ranks = $ex->get("select * from :_usertitle order by minposts desc", 'usertitleid');
+
+            $rank_Map = array(
+                'usertitleid' => 'RankID',
+                'title' => 'Name',
+                'title2' => 'Label',
+                'minposts' => array(
+                    'Column' => 'Attributes',
+                    'Filter' => function ($value) {
+                        $result = array(
+                            'Criteria' => array(
+                                'CountPosts' => $value
+                            )
+                        );
+
+                        return serialize($result);
+                    }
+                ),
+                'level' => array(
+                    'Column' => 'Level',
+                    'Filter' => function ($value) {
+                        static $level = 1;
+
+                        return $level++;
+                    }
+                )
+            );
+
+            $ex->exportTable('Rank', "
+            select
+                ut.*,
+                ut.title as title2,
+                0 as level
+            from :_usertitle as ut
+            order by ut.minposts
+        ", $rank_Map);
+        }
+
+        return $ranks;
     }
 
     /**
@@ -1435,6 +1570,10 @@ class VBulletin extends ExportController {
             }
         }
         self::$permissions2 = $permissions2;
+    }
+
+    public function htmlDecode($value) {
+        return ($value);
     }
 }
 
