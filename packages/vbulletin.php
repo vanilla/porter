@@ -260,8 +260,6 @@ class VBulletin extends ExportController {
             $user_Map['customphoto'] = 'Photo';
         }
 
-        $this->_exportPolls();
-
         $ex->exportTable('User', "
             select
                 u.userid as UserID,
@@ -293,7 +291,6 @@ class VBulletin extends ExportController {
                 left join :_userban ub on u.userid = ub.userid and ub.liftdate <= now()
         ", $user_Map);  // ":_" will be replace by database prefix
 
-        die();
         // Roles
         $role_Map = array(
             'usergroupid' => 'RoleID',
