@@ -19,7 +19,7 @@ function errorHandler($errno, $errstr, $errFile, $errLine) {
         return;
     }
 
-    if (defined(DEBUG) || ($errno != E_DEPRECATED && $errno != E_USER_DEPRECATED)) {
+    if (defined('DEBUG') || ($errno != E_DEPRECATED && $errno != E_USER_DEPRECATED)) {
         $baseDir = realpath(__DIR__.'/../').'/';
         $errFile = str_replace($baseDir, null, $errFile);
 
