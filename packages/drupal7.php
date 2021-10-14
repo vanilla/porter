@@ -104,10 +104,10 @@ class Drupal7 extends ExportController {
                 t.name as Name,
                 t.description as Description,
                 if(th.parent = 0, null, th.parent) as ParentCategoryID
-            from :_taxonomy_term_data t
-            join :_taxonomy_term_hierarchy th on th.tid = t.tid
-            join :_taxonomy_vocabulary tv on tv.vid = t.vid
-            where tv.name = 'Forums'
+            from taxonomy_term_data t
+            left join taxonomy_term_hierarchy th on th.tid = t.tid
+            left join taxonomy_vocabulary tv on tv.vid = t.vid
+            where tv.name in ('Forums', 'Discussion boards')
         ");
 
         // Discussion and comment format differ from each other.
@@ -136,7 +136,7 @@ class Drupal7 extends ExportController {
                 c.nid as DiscussionID,
                 c.uid as InsertUserID,
                 from_unixtime(c.created) as DateInserted,
-                if(n.created <> n.changed, from_unixtime(n.changed), null) as DateUpdated,
+                if(c.created <> c.changed, from_unixtime(c.changed), null) as DateUpdated,
                 frcb.comment_body_value as Body,
                 'BBcode' as Format
             from comment c
