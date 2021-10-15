@@ -1,0 +1,1 @@
+../../migrations/packages/class.discuz.php
