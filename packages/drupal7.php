@@ -23,7 +23,7 @@ $supported['drupal7']['features'] = array(
     'PrivateMessages' => 0,
     'Signatures' => 1,
     'Attachments' => 1,
-    'Bookmarks' => 0,
+    'Bookmarks' => 1,
     'Permissions' => 0,
     'Badges' => 0,
     'UserNotes' => 0,
@@ -61,23 +61,25 @@ class Drupal7 extends ExportController {
         $ex->beginExport('', 'Drupal 7');
 
         // Users.
-        // TODO validate password hashing didn't change between drupal 6 and drupal 7.
         $ex->exportTable('User', "
             select
-                uid as UserID,
+                u.uid as UserID,
                 name as Name,
                 pass as Password,
-                nullif(concat('drupal_profile/',if(picture = 0, null, picture)), 'drupal_profile/') as Photo,
-                concat('md5$$', pass) as Password,
+                f.filename as Photo,
                 'Django' as HashMethod,
                 mail as Email,
                 from_unixtime(created) as DateInserted,
                 from_unixtime(login) as DateLastActive
-            from :_users
-            where uid > 0 and status = 1
+            from :_users u
+            join :_file_managed f on f.fid = u.picture
+            where u.uid > 0 and u.status = 1
         ");
 
         // Signatures.
+        $usermeta_map = array(
+            'Value' => array('Column' => 'Value', 'Filter' => array($this, 'universalizeContent'))
+        );
         $ex->exportTable('UserMeta', "
             select
                 uid as UserID,
@@ -94,7 +96,17 @@ class Drupal7 extends ExportController {
                 'Plugins.Signatures.Format' as Name
             from :_users u
             where uid > 0 and status = 1 and signature is not null and signature <> ''
-        ");
+
+            union
+
+            select
+                pv.uid as UserID,
+                pv.value as Value,
+                pf.name as Name
+            from :_profile_value pv
+            join :_profile_field pf on pf.fid = pv.fid
+            where pv.value <> '' and pv.value <> '0'
+        ", $usermeta_map);
 
         // Roles.
         $ex->exportTable('Role', "
@@ -119,9 +131,9 @@ class Drupal7 extends ExportController {
                 t.name as Name,
                 t.description as Description,
                 if(th.parent = 0, null, th.parent) as ParentCategoryID
-            from taxonomy_term_data t
-            left join taxonomy_term_hierarchy th on th.tid = t.tid
-            left join taxonomy_vocabulary tv on tv.vid = t.vid
+            from :_taxonomy_term_data t
+            left join :_taxonomy_term_hierarchy th on th.tid = t.tid
+            left join :_taxonomy_vocabulary tv on tv.vid = t.vid
             where tv.name in ('Forums', 'Discussion boards')
         ");
 
@@ -130,25 +142,25 @@ class Drupal7 extends ExportController {
             'Body' => array('Column' => 'Body', 'Filter' => array($this, 'convertBase64Attachments')),
         );
         $ex->exportTable('Discussion', "
-            select
+             select
                 n.nid as DiscussionID,
+                f.tid as CategoryID,
+                       n.title as Name,
+                concat(ifnull(r.body_value, b.body_value), ifnull(i.image, '')) as Body,
+                'Html' as Format,
                 n.uid as InsertUserID,
                 from_unixtime(n.created) as DateInserted,
                 if(n.created <> n.changed, from_unixtime(n.changed), null) as DateUpdated,
-                if(n.sticky = 1, 2, 0) as Announce,
-                f.tid as CategoryID,
-                n.title as Name,
-                concat(ifnull(r.body_value, b.body_value), ifnull(i.image, '')) as Body,
-                'Html' as Format
+                if(n.sticky = 1, 2, 0) as Announce
             from :_node n
-            join :_field_data_body b on b.entity_id = n.nid
+            left join :_field_data_body b on b.entity_id = n.nid
             left join :_forum f on f.vid = n.vid
             left join :_field_revision_body r on r.revision_id = n.vid
             left join ( select i.nid, concat('\n<img src=\"{$this->path}', replace(uri, 'public://', ''), ' alt=\"', fileName, '\">') as image
                         from :_image i
                         join :_file_managed fm on fm.fid = i.fid
                         where image_size not like '%thumbnail') i on i.nid = n.nid
-            where n.status = 1 and n.moderate = 0 and b.deleted = 0 and n.Type not in ('Page', 'webform')
+            where n.status = 1 and n.moderate = 0 and n.Type not in ('webform')
         ", $discussionMap);
 
         // Comments.
@@ -176,6 +188,29 @@ class Drupal7 extends ExportController {
             where c.status = 1 and b.deleted = 0
          ", $commentMap);
 
+        //User Discussion
+        $userdiscussion_map = array(
+            'DiscussionID' => array('Column' => 'DiscussionID', 'Filter' => array($this, 'extractDiscussionID')),
+        );
+        $ex->exportTable('UserDiscussion',"
+            select
+                uid as UserID,
+                url as DiscussionID,
+                1 as BookMarked
+            from :_bookmarks
+            where url like 'node%'
+        ", $userdiscussion_map);
+
+        // User Category
+        $ex->exportTable('UserCategory',"
+            select
+                uid as UserID,
+                replace(url, 'forum/', '') as CateogryID,
+                1 as Followed
+            from :_bookmarks
+            where url like 'forum%'
+        ");
+
         // Media.
         $ex->exportTable('Media', "
              select
@@ -186,9 +221,11 @@ class Drupal7 extends ExportController {
                 fm.filename as Name,
                 concat('drupal_attachments/',substring(fm.uri, 10)) as Path,
                 fm.filesize as Size,
+                fm.uid as InsertUserID,
                 from_unixtime(timestamp) as DateInserted
-            from file_managed fm
-            join file_usage fu on fu.fid = fm.fid
+            from :_file_managed fm
+            join :_file_usage fu on fu.fid = fm.fid
+            where fu.type = 'node'
 
             union
 
@@ -200,11 +237,50 @@ class Drupal7 extends ExportController {
                 f.filename as Name,
                 concat('drupal_attachments/',substring(f.uri, 10)) as Path,
                 f.filesize as Size,
+                f.uid as InsertUserID,
                 from_unixtime(timestamp) as DateInserted
-            from file_managed_audio f
-            join file_usage_audio fu on fu.fid = f.fid
+            from :_file_managed_audio f
+            join :_file_usage_audio fu on fu.fid = f.fid
+            where fu.type = 'node'
          ");
 
+        $ex->exportTable('Conversation', "
+        select
+            i.thread_id as ConversationID,
+            m.subject as Subject,
+            from_unixtime(m.timestamp) as DateInserted,
+            m.author as InsertUserID
+        from
+            (select
+                thread_id,
+                min(mid) as mid
+            from :_pm_index
+            where deleted = 0
+            group by thread_id) i
+        join :_pm_message m on m.mid = i.mid
+        ");
+
+        $ex->exportTable('ConversationMessage', "
+            select
+                m.mid as MessageID,
+                i.thread_id as ConversationID,
+                m.body as Body,
+                'Html' as Format,
+                m.author as InsertUserID,
+                from_unixtime(m.timestamp) as DateInserted
+            from :_pm_message m
+            join (select distinct mid, thread_id from :_pm_index) i on i.mid = m.mid
+        ");
+
+        $ex->exportTable('UserConversation', "
+            select
+               recipient as UserID,
+               thread_id as ConversationID
+            from :_pm_index
+            group by recipient, thread_id
+        ");
+
+        $this->nestedQuotesMessages();
         $ex->endExport();
     }
 
@@ -229,6 +305,53 @@ class Drupal7 extends ExportController {
             $value);
 
         return $value;
+    }
+
+    public function array_key_first(array $a) {
+        return array_keys($a)[0];
+    }
+
+    public function universalizeContent($value, $field, $row) {
+
+        if(preg_match('~a:\d~', $value)){
+            $value = preg_replace_callback(
+                '!s:(\d+):"(.*?)";!',
+                function($m) {
+                    return 's:'.strlen($m[2]).':"'.$m[2].'";';
+                },
+                $value);
+
+            $unserializedValue = unserialize($value);
+            if (unserialize($value) !== false && count($unserializedValue) > 0) {
+                return $this->array_key_first($unserializedValue);
+            }
+        }
+
+        return $value;
+    }
+
+    public function extractDiscussionID($value, $field, $row) {
+        preg_match('~node/(\d+)~', $value, $matches);
+        if(isset($matches[0])) {
+            return $matches[0];
+        }
+        return $value;
+    }
+
+    public function nestedQuotesMessages() {
+        echo "// Run nested.sql to quote the nested comments. ***" . PHP_EOL;
+        file_put_contents("nested.sql","CREATE TABLE GDN_Comment_copy LIKE GDN_Comment;
+          INSERT INTO GDN_Comment_copy SELECT * FROM GDN_Comment;
+          update GDN_Comment c,
+                (select c.CommentID, concat('<blockquote class=\"Quote\" rel=\"',ifnull(u.Name, 'unknown'), '\"><p>', p.Body, '</p></blockquote>\n') as body
+                from GDN_Comment_copy c
+                join (select cid, pid from `{$this->param('dbname')}`.comment where pid > 0) lc on lc.cid = c.CommentID
+		        join GDN_Comment_copy p on p.CommentID = lc.pid
+		        left join GDN_User u on u.UserID = p.InsertUserID) p
+		set c.Body = concat(p.Body, c.Body)
+		where c.CommentID = p.CommentID;
+		DROP TABLE GDN_Comment_copy;
+		");
     }
 }
 
