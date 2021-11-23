@@ -1,1 +1,0 @@
-../../migrations/packages/getsatisfaction.php

@@ -776,7 +776,7 @@ function vanillaStructure() {
             'Attributes' => 'text'
         ),
         'UserPoints' => array(
-            //'SlotType' => array('d','w','m','y','a'),
+            'SlotType' => 'varchar(1)',
             'TimeSlot' => 'datetime',
             'Source' => 'varchar(10)',
             'CategoryID' => 'int',

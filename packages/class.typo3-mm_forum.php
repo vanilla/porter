@@ -1,1 +1,0 @@
-../../migrations/packages/class.typo3-mm_forum.php

@@ -202,14 +202,17 @@ class Drupal7 extends ExportController {
         ", $userdiscussion_map);
 
         // User Category
+        $usercategory_map = array(
+            'CategoryID' => array('Column' => 'CategoryID', 'Filter' => array($this, 'extractCategoryID')),
+        );
         $ex->exportTable('UserCategory',"
             select
                 uid as UserID,
-                replace(url, 'forum/', '') as CateogryID,
+                url as CategoryID,
                 1 as Followed
             from :_bookmarks
             where url like 'forum%'
-        ");
+        ", $usercategory_map);
 
         // Media.
         $ex->exportTable('Media', "
@@ -332,8 +335,16 @@ class Drupal7 extends ExportController {
 
     public function extractDiscussionID($value, $field, $row) {
         preg_match('~node/(\d+)~', $value, $matches);
-        if(isset($matches[0])) {
-            return $matches[0];
+        if(isset($matches[1])) {
+            return $matches[1];
+        }
+        return $value;
+    }
+
+    public function extractCategoryID($value, $field, $row) {
+        preg_match('~forum/(\d+)~', $value, $matches);
+        if(isset($matches[1])) {
+            return $matches[1];
         }
         return $value;
     }
