@@ -335,7 +335,6 @@ class VBulletin extends ExportController {
         }
         # Export from our tmp table and drop
         $this->ex->exportTable('UserRole', 'select distinct userid, usergroupid from VbulletinRoles', $userRole_Map);
-        die();
         $this->ex->query("drop table if exists VbulletinRoles");
 
         // Permissions.
@@ -555,7 +554,7 @@ class VBulletin extends ExportController {
                 $minDiscussionWhere
                 $forumWhere
         ", $comment_Map);
-        die();
+
         // UserDiscussion
         if ($minDiscussionID) {
             $minDiscussionWhere = "where st.threadid > $minDiscussionID";
