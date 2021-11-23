@@ -76,7 +76,7 @@ class Drupal7 extends ExportController {
                 INET6_ATON(ip) as InsertIPAddress
             from :_users u
             left join :_file_managed f on f.fid = u.picture
-            where u.uid > 0
+            where u.uid > 0 and u.status = 1
         ");
 
         // Signatures.
