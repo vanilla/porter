@@ -67,13 +67,16 @@ class Drupal7 extends ExportController {
                 name as Name,
                 pass as Password,
                 f.filename as Photo,
-                'Django' as HashMethod,
+                'Drupal' as HashMethod,
                 mail as Email,
                 from_unixtime(created) as DateInserted,
-                from_unixtime(login) as DateLastActive
+                from_unixtime(login) as DateLastActive,
+                if(u.status = 0, 1, 0) as Banned,
+                INET6_ATON(ip) as LastIPAddress,
+                INET6_ATON(ip) as InsertIPAddress
             from :_users u
-            join :_file_managed f on f.fid = u.picture
-            where u.uid > 0 and u.status = 1
+            left join :_file_managed f on f.fid = u.picture
+            where u.uid > 0
         ");
 
         // Signatures.
@@ -102,7 +105,7 @@ class Drupal7 extends ExportController {
             select
                 pv.uid as UserID,
                 pv.value as Value,
-                pf.name as Name
+                concat('Profile.', pf.name) as Name
             from :_profile_value pv
             join :_profile_field pf on pf.fid = pv.fid
             where pv.value <> '' and pv.value <> '0'
@@ -146,16 +149,21 @@ class Drupal7 extends ExportController {
                 n.nid as DiscussionID,
                 f.tid as CategoryID,
                        n.title as Name,
-                concat(ifnull(r.body_value, b.body_value), ifnull(i.image, '')) as Body,
+                concat(b.body_value, ifnull(i.image, '')) as Body,
                 'Html' as Format,
                 n.uid as InsertUserID,
                 from_unixtime(n.created) as DateInserted,
                 if(n.created <> n.changed, from_unixtime(n.changed), null) as DateUpdated,
                 if(n.sticky = 1, 2, 0) as Announce
             from :_node n
-            left join :_field_data_body b on b.entity_id = n.nid
+            left join (
+                select entity_id, body_value from :_field_data_body
+
+                union
+
+                select entity_id, field_body_value from :_field_data_field_body
+            ) b on b.entity_id = n.nid
             left join :_forum f on f.vid = n.vid
-            left join :_field_revision_body r on r.revision_id = n.vid
             left join ( select i.nid, concat('\n<img src=\"{$this->path}', replace(uri, 'public://', ''), ' alt=\"', fileName, '\">') as image
                         from :_image i
                         join :_file_managed fm on fm.fid = i.fid
@@ -179,13 +187,13 @@ class Drupal7 extends ExportController {
                     if(c.subject is not null and c.subject not like 'RE%' and c.subject not like 'Re%' and c.subject <> 'N/A',
                         concat('<b>', c.subject, '</b>\n'), ''),
                     -- Body
-                    ifnull(r.comment_body_value, b.comment_body_value)
+                    b.comment_body_value
                 ) as Body,
                 'Html' as Format
             from :_comment c
             join :_field_data_comment_body b on b.entity_id = c.cid
-            left join :_field_revision_comment_body r on r.entity_id = c.cid
-            where c.status = 1 and b.deleted = 0
+            join :_node n on n.nid = c.nid
+            where c.status = 1 and b.deleted = 0 and n.status = 1
          ", $commentMap);
 
         //User Discussion
@@ -354,7 +362,7 @@ class Drupal7 extends ExportController {
         file_put_contents("nested.sql","CREATE TABLE GDN_Comment_copy LIKE GDN_Comment;
           INSERT INTO GDN_Comment_copy SELECT * FROM GDN_Comment;
           update GDN_Comment c,
-                (select c.CommentID, concat('<blockquote class=\"Quote\" rel=\"',ifnull(u.Name, 'unknown'), '\"><p>', p.Body, '</p></blockquote>\n') as body
+                (select c.CommentID, concat('<blockquote data-commentid=',lc.pid ,' class=\"Quote\" rel=\"',ifnull(u.Name, 'unknown'), '\"><p>', p.Body, '</p></blockquote>\n') as body
                 from GDN_Comment_copy c
                 join (select cid, pid from `{$this->param('dbname')}`.comment where pid > 0) lc on lc.cid = c.CommentID
 		        join GDN_Comment_copy p on p.CommentID = lc.pid
