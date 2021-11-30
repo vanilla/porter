@@ -259,7 +259,7 @@ class Xenforo extends ExportController {
          select
             u.*,
             ua.data as password,
-            'xenforo' as hash_method,
+            if(length(data) > 100, 'Reset', 'xenforo'),
             case when u.avatar_date > 0 then concat('{$cdn}xf/', u.user_id div 1000, '/', u.user_id, '.jpg') else null end as avatar
          from :_user u
          left join :_user_authenticate ua
