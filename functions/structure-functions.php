@@ -442,6 +442,12 @@ function vanillaStructure() {
             'CssClass' => 'varchar(20)',
             'Sort' => 'int'
         ),
+        'pageRouteAlias' => array(
+            'pageRouteAliasID' => 'int',
+            'recordID' => 'int',
+            'recordType' => 'varchar(32)',
+            'alias' => 'varchar(255)'
+        ),
         'Permission' => array(
             'PermissionID' => 'int',
             'RoleID' => 'int',
@@ -776,7 +782,7 @@ function vanillaStructure() {
             'Attributes' => 'text'
         ),
         'UserPoints' => array(
-            'SlotType' => 'varchar(1)',
+            'SlotType' => array('d','w','m','y','a'),
             'TimeSlot' => 'datetime',
             'Source' => 'varchar(10)',
             'CategoryID' => 'int',
