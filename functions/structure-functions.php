@@ -804,6 +804,7 @@ function vanillaStructure()
             "UserID" => "int",
             "Name" => "varchar(255)",
             "Value" => "text",
+            "QueryValue" => "varchar(500)",
         ],
         "UserNote" => [
             "UserNoteID" => "int",
