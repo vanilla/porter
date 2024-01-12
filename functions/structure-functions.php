@@ -243,6 +243,7 @@ function vanillaStructure()
             "Type" => "varchar(10)",
             "ForeignID" => "varchar(32)",
             "CategoryID" => "int",
+            "statusID" => "int",
             "InsertUserID" => "int",
             "UpdateUserID" => "int",
             "FirstCommentID" => "int",
@@ -757,7 +758,10 @@ function vanillaStructure()
             "UserID" => "int",
             "CategoryID" => "int",
             "DateMarkedRead" => "datetime",
+            "Followed" => "tinyint",
             "Unfollow" => "tinyint",
+            "DateFollowed" => "datetime",
+            "DateUnfollowed" => "datetime",
         ],
         "UserComment" => [
             "UserID" => "int",
