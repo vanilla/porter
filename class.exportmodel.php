@@ -1268,6 +1268,58 @@ class ExportModel {
         return $result->nextResultRow() !== false;
     }
 
+    /**
+     * Add a column to a table if it doesn't exist.
+     *
+     * @param string $table
+     * @param string $column
+     * @param string $type
+     * @param bool $autoIncrement
+     * @return void
+     */
+    public function addColumn(string $table, string $column, string $type, bool $autoIncrement = false): void
+    {
+        if(!$this->columnExists($table,$column)) {
+            $sql = "ALTER TABLE `$table` ADD COLUMN `$column` $type";
+
+            if($autoIncrement) {
+                $sql .= " AUTO_INCREMENT , ADD PRIMARY KEY (`$column`)";
+            }
+
+            $this->query($sql);
+        }
+    }
+
+    /**
+     * Add an index to a table if it doesn't exist.
+     *
+     * @param string $table
+     * @param array $indexes
+     * @param bool $unique
+     * @return void
+     */
+    public function addIndex(string $table, array $indexes, bool $unique = false): void
+    {
+        $indexName = $table;
+        $queryIndex = "";
+
+        foreach ($indexes as $index) {
+            $indexName .= "_$index";
+            $queryIndex .= "`$index`,";
+        }
+
+        $indexName .= "_idx";
+
+        $result = $this->query("SELECT COUNT(*) as cou FROM INFORMATION_SCHEMA.STATISTICS
+            WHERE table_schema=DATABASE() AND table_name='$table' AND index_name='$indexName';");
+
+        if($result->nextResultRow()["cou"] == 0) {
+            $uniqueIndex = $unique ? "UNIQUE" : "";
+            $queryIndex = substr($queryIndex, 0, -1);
+            $sql = "ALTER TABLE `$table` ADD $uniqueIndex INDEX `$indexName` ($queryIndex);";
+            $this->query($sql);
+        }
+    }
 }
 
 ?>
